@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <!-- Override with: dotnet build -p:GamePath="X:\path\to\THE HOUSE OF THE DEAD Remake" -->
+    <GamePath Condition="'$(GamePath)' == ''">D:\SteamLibrary\steamapps\common\THE HOUSE OF THE DEAD Remake</GamePath>
+    <GameManaged>$(GamePath)\The House of the Dead Remake_Data\Managed</GameManaged>
+    <BepInExCore>$(GamePath)\BepInEx\core</BepInExCore>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+</Project>

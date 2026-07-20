@@ -1,0 +1,13 @@
+# Build outputs
+bin/
+obj/
+*.user
+
+# Local-only
+*.zip
+*.tgz
+.claude/
+.vs/
+
+# Never commit game assemblies
+GameLibs/
