@@ -16,7 +16,7 @@ namespace HotdVR
         private void Update()
         {
             if (VRRuntimeBootstrap.Active && Plugin.Cfg.FrameTimeStats.Value)
-                cpuStats.Add(Time.unscaledDeltaTime * 1000f, VRCameraGate.LoadingScreenActive);
+                cpuStats.Add(Time.unscaledDeltaTime * 1000f, VRCameraGate.InLoadingEpisode);
 
             if (!VRRuntimeBootstrap.Active && Input.GetKeyDown(KeyCode.F9))
             {

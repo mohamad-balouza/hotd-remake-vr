@@ -169,7 +169,7 @@ namespace HotdVR
                         renderStats.Add(frameAccumMs, frameWasSuspended);
                     execFrame = f;
                     frameAccumMs = 0f;
-                    frameWasSuspended = VRCameraGate.LoadingScreenActive;
+                    frameWasSuspended = VRCameraGate.InLoadingEpisode;
                 }
                 execStartTicks = System.Diagnostics.Stopwatch.GetTimestamp();
             }
