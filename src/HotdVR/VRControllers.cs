@@ -62,6 +62,7 @@ namespace HotdVR
             offHand.TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 stick);
             offHand.TryGetFeatureValue(CommonUsages.menuButton, out bool menu);
             aimHand.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out bool stickClick);
+            aimHand.TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 aimStickXr);
             bool xrAny = trigger || grip || a || b || x || y || menu || stickClick || stick.sqrMagnitude > 0.04f;
 
             // Source 2: raw OpenVR legacy controller state - works whenever the
@@ -103,18 +104,29 @@ namespace HotdVR
             YHeld = y; YDown = y && !prevY;
             StickClickDown = stickClick && !prevStickClick;
             MenuDown = menu && !prevMenu;
-            LeftStick = stick;
+
+            // The off-hand thumbstick AXIS is dead in some runtimes (VD's
+            // legacy state delivers its buttons but rAxis0 stays zero, seen
+            // 2026-07-21) - menus were unnavigable. Use whichever stick shows
+            // the larger deflection: the Nav/Page actions are only read by
+            // menu screens, so the aim stick doubles as a nav stick safely.
+            Vector2 navStick = stick;
+            if (rawAimStick.sqrMagnitude > navStick.sqrMagnitude) navStick = rawAimStick;
+            if (aimStickXr.sqrMagnitude > navStick.sqrMagnitude) navStick = aimStickXr;
+            LeftStick = navStick;
             const float on = 0.6f;
-            StickUpDown = stick.y > on && prevStick.y <= on;
-            StickDownDown = stick.y < -on && prevStick.y >= -on;
-            StickLeftDown = stick.x < -on && prevStick.x >= -on;
-            StickRightDown = stick.x > on && prevStick.x <= on;
+            StickUpDown = navStick.y > on && prevStick.y <= on;
+            StickDownDown = navStick.y < -on && prevStick.y >= -on;
+            StickLeftDown = navStick.x < -on && prevStick.x >= -on;
+            StickRightDown = navStick.x > on && prevStick.x <= on;
 
             prevTrigger = trigger; prevGrip = grip; prevA = a; prevB = b; prevX = x; prevY = y;
-            prevStickClick = stickClick; prevMenu = menu; prevStick = stick;
+            prevStickClick = stickClick; prevMenu = menu; prevStick = navStick;
 
-            UpdatePitchAdjust(rawOffStick.sqrMagnitude > 0.01f ? rawOffStick : stick, rawOffStickClick);
-            UpdateLaserToggle(rawOffStick.sqrMagnitude > 0.01f ? rawOffStick : stick, rawOffStickClick);
+            // Held-adjust gestures and the laser toggle also use the merged
+            // stick, so they keep working when the off-hand axis is dead.
+            UpdateHeldAdjust(navStick, rawOffStickClick);
+            UpdateLaserToggle(navStick, rawOffStickClick);
         }
 
         // Laser on/off: hold the off-hand stick click 0.6s with the stick
@@ -174,27 +186,37 @@ namespace HotdVR
             public Vector2 aimStick;
         }
 
-        // Live-adjustable aim tilt: off-hand stick up/down WHILE holding that
-        // stick's click (or PageUp/PageDown) changes it in-game; committed to
-        // the config file on release. The click-gate keeps it from colliding
-        // with menu navigation on the same stick.
+        // Live-adjust gestures, both gated on holding the off-hand stick
+        // click (or keyboard): dominant stick axis picks the parameter -
+        //   Y (up/down)    -> aim tilt (also PageUp/PageDown)
+        //   X (left/right) -> gun model forward/back (also Home/End)
+        // Committed to the config file on release. The click-gate keeps them
+        // from colliding with menu navigation on the same stick.
         internal static float LivePitch = float.NaN;
-        private bool pitchDirty;
+        internal static float LiveGunZ = float.NaN;
+        private bool pitchDirty, gunZDirty;
 
-        private void UpdatePitchAdjust(Vector2 offStick, bool offStickClicked)
+        private void UpdateHeldAdjust(Vector2 adjStick, bool offStickClicked)
         {
             if (float.IsNaN(LivePitch))
                 LivePitch = Plugin.Cfg.AimPitchOffset.Value;
+            if (float.IsNaN(LiveGunZ))
+                LiveGunZ = Mathf.Clamp(Plugin.Cfg.GunModelZOffset.Value, -0.2f, 0.2f);
 
-            float delta = 0f;
-            if (offStickClicked && Mathf.Abs(offStick.y) > 0.5f)
-                delta = -offStick.y * 20f * Time.unscaledDeltaTime; // stick up = aim higher = less tilt
-            if (Input.GetKey(KeyCode.PageDown)) delta += 20f * Time.unscaledDeltaTime;
-            if (Input.GetKey(KeyCode.PageUp)) delta -= 20f * Time.unscaledDeltaTime;
+            bool yDominant = Mathf.Abs(adjStick.y) >= Mathf.Abs(adjStick.x);
+            float pitchDelta = 0f, gunDelta = 0f;
+            if (offStickClicked && yDominant && Mathf.Abs(adjStick.y) > 0.5f)
+                pitchDelta = -adjStick.y * 20f * Time.unscaledDeltaTime; // stick up = aim higher = less tilt
+            if (offStickClicked && !yDominant && Mathf.Abs(adjStick.x) > 0.5f)
+                gunDelta = -adjStick.x * 0.08f * Time.unscaledDeltaTime; // stick left = pull gun back
+            if (Input.GetKey(KeyCode.PageDown)) pitchDelta += 20f * Time.unscaledDeltaTime;
+            if (Input.GetKey(KeyCode.PageUp)) pitchDelta -= 20f * Time.unscaledDeltaTime;
+            if (Input.GetKey(KeyCode.Home)) gunDelta += 0.08f * Time.unscaledDeltaTime;
+            if (Input.GetKey(KeyCode.End)) gunDelta -= 0.08f * Time.unscaledDeltaTime;
 
-            if (delta != 0f)
+            if (pitchDelta != 0f)
             {
-                LivePitch = Mathf.Clamp(LivePitch + delta, -10f, 80f);
+                LivePitch = Mathf.Clamp(LivePitch + pitchDelta, -10f, 80f);
                 pitchDirty = true;
             }
             else if (pitchDirty)
@@ -203,6 +225,19 @@ namespace HotdVR
                 LivePitch = Mathf.Round(LivePitch * 2f) / 2f;
                 Plugin.Cfg.AimPitchOffset.Value = LivePitch; // persists to cfg
                 Plugin.Log.LogInfo($"[VRCtl] AimPitchOffset saved: {LivePitch:F1}");
+            }
+
+            if (gunDelta != 0f)
+            {
+                LiveGunZ = Mathf.Clamp(LiveGunZ + gunDelta, -0.2f, 0.2f);
+                gunZDirty = true;
+            }
+            else if (gunZDirty)
+            {
+                gunZDirty = false;
+                LiveGunZ = Mathf.Round(LiveGunZ * 200f) / 200f; // 5mm steps
+                Plugin.Cfg.GunModelZOffset.Value = LiveGunZ; // persists to cfg
+                Plugin.Log.LogInfo($"[VRCtl] GunModelZOffset saved: {LiveGunZ:F3}");
             }
         }
 
@@ -262,7 +297,10 @@ namespace HotdVR
                 {
                     lastOffMask = pressed;
                     lastAxisLog = Time.realtimeSinceStartup;
-                    Plugin.Log.LogInfo($"[VRCtl/RAW off] pressed=0x{pressed:X} touched=0x{state.ulButtonTouched:X} ax0=({state.rAxis0.x:F2},{state.rAxis0.y:F2}) ax1=({state.rAxis1.x:F2}) ax2=({state.rAxis2.x:F2})");
+                    // ax3/ax4 included: VD delivered a permanently-zero off-hand
+                    // rAxis0 (2026-07-21) - if the stick lives on another axis,
+                    // these lines will reveal it.
+                    Plugin.Log.LogInfo($"[VRCtl/RAW off] pressed=0x{pressed:X} touched=0x{state.ulButtonTouched:X} ax0=({state.rAxis0.x:F2},{state.rAxis0.y:F2}) ax1=({state.rAxis1.x:F2}) ax2=({state.rAxis2.x:F2}) ax3=({state.rAxis3.x:F2},{state.rAxis3.y:F2}) ax4=({state.rAxis4.x:F2},{state.rAxis4.y:F2})");
                 }
             }
             return any;

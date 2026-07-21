@@ -39,20 +39,23 @@ patches in. Repo builds + auto-deploys; docs in place.
   `XRSettings.renderViewportScale` dynamic scaling, reflection probe update
   throttling.
 
-## 3. UI polish (M6 — mostly shipped 2026-07-21, round-2 verification pending)
+## 3. UI polish (M6 — round-2 feedback folded in 2026-07-21)
 
-- DONE: lazy-follow world-space HUD (`UI.HudMode=WorldFollow`, allowlisted
-  chapter canvases on a yaw-deadzone cockpit anchor; distance/scale/speed
-  configs). Camera-space remains the default + menu behavior.
-- DONE: laser toggle (off-hand stick-click long-press 0.6s centered, or F8;
-  persists via ShowLaser).
-- DONE: procedural gun model per weapon type (`Controls.ShowGunModel`) —
-  the game has no gameplay gun meshes (armory models are menu-scene-only,
-  not addressable), so primitives it is. Upgrade path: additively load the
-  armory scene and clone `HD_PreviewWeapon` renderers (fragile, deferred).
+- Round-2 user verdict: gun model good, pause menu good, laser toggle works,
+  transition holds, perf improved (volumetrics+SSAO off).
+- FIXED after round 2: menu stick-nav (off-hand axis dead under VD → nav
+  merges both sticks); invisible chapter HUD (game resets canvases to
+  overlay → world conversion now re-applied; user back on CameraSpace
+  default anyway); main menu pushed to `UI.MenuDistance` 2m; gun model
+  forward/back live-adjust (`Controls.GunModelZOffset`); loading overlay
+  card for shoot-to-continue waits (`Stability.LoadingOverlay`).
+- WorldFollow HUD stays EXPERIMENTAL: needs a ZTest-Always UI material pass
+  (world canvases vanish into corridor geometry) before it can be default.
 - Remaining: menu interaction via laser-pointer UI clicking (uGUI raycaster
   on the controller ray); subtitle/dialog placement during cutscenes;
-  possible HUD element splitting (score top, ammo near gun hand).
+  nicer gun mesh (user request, low priority — runtime OBJ loader for a
+  CC0 model, or clone armory `HD_PreviewWeapon` renderers via additive
+  scene load; both deferred); possible HUD element splitting.
 
 ## 4. Release engineering (M7)
 

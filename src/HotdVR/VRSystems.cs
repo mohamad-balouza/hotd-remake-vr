@@ -124,6 +124,7 @@ namespace HotdVR
 
         private void OnApplicationQuit()
         {
+            VRLoadingOverlay.Destroy();
             VRRuntimeBootstrap.TryStop();
         }
     }

@@ -40,7 +40,11 @@ namespace HotdVR
             RefreshAllowlist();
             bool worldMode = Plugin.Cfg.HudMode.Value == HudMode.WorldFollow
                              && vrCamera.name == "cam_MainCamera";
-            float planeDist = Mathf.Clamp(Plugin.Cfg.HudDistance.Value, 0.5f, 3f);
+            // Menu-context canvases (fullscreen video backgrounds) sit farther
+            // out than the chapter HUD - less in-your-face, denser per degree.
+            float planeDist = vrCamera.name == "cam_MainCamera"
+                ? Mathf.Clamp(Plugin.Cfg.HudDistance.Value, 0.5f, 3f)
+                : Mathf.Clamp(Plugin.Cfg.MenuDistance.Value, 0.5f, 4f);
 
             foreach (var canvas in FindObjectsOfType<Canvas>())
             {

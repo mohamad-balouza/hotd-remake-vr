@@ -35,9 +35,15 @@ namespace HotdVR
             if (root == null || type != builtType)
                 Rebuild(type);
             root.SetActive(true);
+            // Forward/back offset along the barrel axis, live-adjustable
+            // (off-hand stick click + stick left/right, or Home/End).
+            float z = float.IsNaN(VRControllers.LiveGunZ)
+                ? Mathf.Clamp(Plugin.Cfg.GunModelZOffset.Value, -0.2f, 0.2f)
+                : VRControllers.LiveGunZ;
+            var rot = Quaternion.LookRotation(VRControllers.AimRay.direction, VRControllers.AimWorldRot * Vector3.up);
             root.transform.SetPositionAndRotation(
-                VRControllers.AimRay.origin,
-                Quaternion.LookRotation(VRControllers.AimRay.direction, VRControllers.AimWorldRot * Vector3.up));
+                VRControllers.AimRay.origin + rot * new Vector3(0f, 0f, z),
+                rot);
         }
 
         private WeaponType ResolveWeaponType()
