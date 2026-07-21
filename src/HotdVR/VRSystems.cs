@@ -86,7 +86,7 @@ namespace HotdVR
                 $"[VR/state{index}] running={d.running} renderPasses={passes} " +
                 $"camera='{(cam != null ? cam.name : "<none>")}' stereo={(cam != null && cam.stereoEnabled)} " +
                 $"eyeTex={XRSettings.eyeTextureWidth}x{XRSettings.eyeTextureHeight} device='{XRSettings.loadedDeviceName}' " +
-                $"renderHealth: rendered={HdrpXrDiag.renderedFrames} skipped={HdrpXrDiag.skippedFrames}");
+                $"renderHealth: rendered={HdrpXrDiag.renderedFrames} repaired={HdrpXrDiag.repairedFrames} skipped={HdrpXrDiag.skippedFrames}");
             DumpCameras($"state{index}");
         }
 

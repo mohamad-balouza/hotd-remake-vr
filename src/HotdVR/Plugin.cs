@@ -39,6 +39,7 @@ namespace HotdVR
 
             var harmony = new HarmonyLib.Harmony(Guid);
             HdrpXrDiag.Apply(harmony);
+            ComfortPatches.Apply(harmony);
 
             var runner = new GameObject("HotdVR");
             DontDestroyOnLoad(runner);
@@ -46,6 +47,7 @@ namespace HotdVR
             runner.AddComponent<VRSystems>();
             runner.AddComponent<EyeCapture>();
             runner.AddComponent<VRUiProjector>();
+            runner.AddComponent<VRCameraRig>();
         }
     }
 
