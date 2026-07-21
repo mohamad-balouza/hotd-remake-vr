@@ -163,9 +163,10 @@ namespace HotdVR
                 result.stick = new Vector2(state.rAxis0.x, state.rAxis0.y);
                 any = true;
 
-                if (pressed != lastOffMask)
+                if (pressed != lastOffMask || (Time.realtimeSinceStartup - lastAxisLog > 2f && result.stick.sqrMagnitude > 0.09f))
                 {
                     lastOffMask = pressed;
+                    lastAxisLog = Time.realtimeSinceStartup;
                     Plugin.Log.LogInfo($"[VRCtl/RAW off] pressed=0x{pressed:X} touched=0x{state.ulButtonTouched:X} ax0=({state.rAxis0.x:F2},{state.rAxis0.y:F2}) ax1=({state.rAxis1.x:F2}) ax2=({state.rAxis2.x:F2})");
                 }
             }
