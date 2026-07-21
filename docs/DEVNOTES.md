@@ -96,9 +96,13 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
    default FALSE and hardened (activation additionally needs camera_Loading
    gone 20+ consecutive frames — chapter prompts never satisfy this).
    Instead, suspension fades the SteamVR compositor grid in/out
-   (`Stability.LoadingGridFade`, `OpenVR.Compositor.FadeGrid`) so loads
-   show the tracked void, not frozen black. RULE OF THUMB: never enable
-   xrRendering on a camera in a frame set that contains camera_Loading.
+   (`Stability.LoadingGridFade`, `OpenVR.Compositor.FadeGrid`) AND shows a
+   head-locked OpenVR overlay card (`Stability.LoadingOverlay`,
+   `VRLoadingOverlay`, `SetOverlayFromFile` with the deployed
+   `loading-overlay.png`) telling the player to pull the trigger when the
+   load ends — the shoot-to-continue wait is no longer blind. RULE OF
+   THUMB: never enable xrRendering on a camera in a frame set that contains
+   camera_Loading.
 - SteamVR **null driver** (re-tested 2026-07-21): culling params come out
   mostly FINITE (second eye repaired from the first) — XR passes actually
   render and submit headless, so the null driver now exercises the real
@@ -128,7 +132,18 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
 - `VRControllers` merges XR-features OR raw state, tracks edges, renders the
   laser (LineRenderer, HDRP/Unlit) + reticle sphere at the physics-raycast hit.
   Laser toggle: off-hand stick click held 0.6s with the stick CENTERED
-  (deflected click = aim tilt), or F8; persists via `ShowLaser`.
+  (deflected click = adjust gestures), or F8; persists via `ShowLaser`.
+- **The OFF-hand thumbstick AXIS is dead under VD's rift profile** (found
+  2026-07-21): its buttons/click arrive in the legacy state but `rAxis0`
+  stays (0,0) — menus were stick-unnavigable. Fix: the nav stick is the
+  larger deflection of off-hand and AIM-hand sticks (Nav/Page actions are
+  menu-only, so the aim stick doubles safely); the held-adjust gestures use
+  the same merged stick. `[VRCtl/RAW off]` now logs ax3/ax4 too in case the
+  axis lives elsewhere.
+- Held-adjust gestures (off-hand stick click held, dominant axis wins):
+  stick Y = aim tilt (PageUp/PageDown), stick X = gun model forward/back
+  (Home/End), both auto-saved to config on release
+  (`AimPitchOffset` / `GunModelZOffset`).
 - `VRGunModel`: procedural primitive gun on the aim pose (the game has no
   player-held weapon meshes in gameplay; armory `HD_PreviewWeapon` models are
   menu-scene-embedded, not addressable). Swaps per-weapon silhouette by
@@ -161,13 +176,18 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
   excluded+hidden); conversion skipped entirely while XR is suspended.
   NOTE: camera-space canvases break the game's pixel-space canvas math, which
   is why the crosshair is excluded rather than converted.
-  `UI.HudMode=WorldFollow`: allowlisted chapter HUD canvases
-  (`UI.HudWorldSpaceCanvases`; inventory from the chapter-1 playthrough log)
-  go WorldSpace on `VRHudAnchor` — a yaw-only cockpit anchor on the rig's
-  published base (ride) pose with deadzone+hysteresis easing; canvas
-  transforms driven directly, never reparented; world scale matches the
-  camera-space apparent size so mode switches are visually continuous.
-  Menus and cam='Main Camera' contexts always stay camera-space.
+  Menu-context canvases (vr camera = 'Main Camera') use `UI.MenuDistance`
+  (2m) instead of `HudDistance` — fullscreen menu art is less in-your-face.
+  `UI.HudMode=WorldFollow` (EXPERIMENTAL, off by default): allowlisted
+  chapter HUD canvases (`UI.HudWorldSpaceCanvases`) go WorldSpace on
+  `VRHudAnchor` — a yaw-only cockpit anchor on the rig's published base
+  (ride) pose with deadzone+hysteresis easing; canvas transforms driven
+  directly, never reparented. CAUTION (round-2 lesson): the game RESETS its
+  canvases to ScreenSpaceOverlay on UI refreshes — `Register` must re-apply
+  the world conversion for known canvases or the HUD sticks in overlay mode
+  and is invisible (fixed); remaining known issue: world-space canvases
+  z-test against scene geometry and vanish in tight corridors (needs a
+  ZTest-Always UI material pass before WorldFollow can be default).
 - Perf: `FrameSettings.AggregateFrameSettings` postfix strips SSR/contact
   shadows (default) and optionally volumetrics/SSAO while VR active.
   `RenderScale` sets `display.scaleOfAllRenderTargets` before StartSubsystems.

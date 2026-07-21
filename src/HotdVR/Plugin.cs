@@ -66,6 +66,7 @@ namespace HotdVR
         public readonly ConfigEntry<bool> ProjectUiToVR;
         public readonly ConfigEntry<HudMode> HudMode;
         public readonly ConfigEntry<float> HudDistance;
+        public readonly ConfigEntry<float> MenuDistance;
         public readonly ConfigEntry<float> HudScale;
         public readonly ConfigEntry<float> HudFollowSpeed;
         public readonly ConfigEntry<float> HudYawDeadzoneDegrees;
@@ -75,10 +76,12 @@ namespace HotdVR
         public readonly ConfigEntry<bool> LeftHanded;
         public readonly ConfigEntry<bool> ShowLaser;
         public readonly ConfigEntry<bool> ShowGunModel;
+        public readonly ConfigEntry<float> GunModelZOffset;
         public readonly ConfigEntry<float> AimPitchOffset;
         public readonly ConfigEntry<float> LoadingGraceSeconds;
         public readonly ConfigEntry<bool> PromptPhaseXR;
         public readonly ConfigEntry<bool> LoadingGridFade;
+        public readonly ConfigEntry<bool> LoadingOverlay;
         public readonly ConfigEntry<float> RenderScale;
         public readonly ConfigEntry<bool> DisableSSR;
         public readonly ConfigEntry<bool> DisableVolumetrics;
@@ -98,7 +101,10 @@ namespace HotdVR
                 + "chapter HUD canvases float on a world-space panel that lazily follows the ride camera "
                 + "(cockpit style). Menus always stay camera-space.");
             HudDistance = config.Bind("UI", "HudDistance", 1.2f,
-                "Distance (meters) of the projected UI plane / world HUD panel from the camera (0.5-3).");
+                "Distance (meters) of the projected chapter UI plane / world HUD panel from the camera (0.5-3).");
+            MenuDistance = config.Bind("UI", "MenuDistance", 2.0f,
+                "Distance (meters) of menu-context UI planes (main menu, title) from the camera (0.5-4). "
+                + "Farther than the chapter HUD so fullscreen menu art is less in-your-face.");
             HudScale = config.Bind("UI", "HudScale", 1.0f,
                 "Size multiplier of the world-space HUD panel (WorldFollow mode only, 0.2-3).");
             HudFollowSpeed = config.Bind("UI", "HudFollowSpeed", 4.0f,
@@ -116,6 +122,10 @@ namespace HotdVR
                 + "off-hand stick click 0.6s with the stick centered, or press F8.");
             ShowGunModel = config.Bind("Controls", "ShowGunModel", true,
                 "Show a simple gun model in the aim hand, matching the current weapon type.");
+            GunModelZOffset = config.Bind("Controls", "GunModelZOffset", 0.0f,
+                "Forward/back offset (meters) of the gun model along the barrel axis. Adjust in-game: "
+                + "hold the off-hand stick click and push the stick left (pull back) / right (push "
+                + "forward), or press Home/End. Range -0.2 to 0.2.");
             AimPitchOffset = config.Bind("Controls", "AimPitchOffset", 45f,
                 "Downward tilt (degrees) of the aim ray relative to the controller, approximating a pistol barrel. 0 = controller forward.");
             LoadingGraceSeconds = config.Bind("Stability", "LoadingGraceSeconds", 1.5f,
@@ -131,6 +141,9 @@ namespace HotdVR
             LoadingGridFade = config.Bind("Stability", "LoadingGridFade", true,
                 "Fade the SteamVR compositor grid in while XR is suspended during loads, so the headset "
                 + "shows the tracked void instead of a frozen/black view.");
+            LoadingOverlay = config.Bind("Stability", "LoadingOverlay", true,
+                "Show a head-locked 'Loading - pull the trigger when ready' card (OpenVR overlay) while "
+                + "XR is suspended during loads, so shoot-to-continue prompts aren't a blind wait.");
             RenderScale = config.Bind("Performance", "RenderScale", 1.0f,
                 "Eye render target scale (0.5-1.5). Lower = sharper performance, softer image. Applied at VR start.");
             DisableSSR = config.Bind("Performance", "DisableSSR", true,

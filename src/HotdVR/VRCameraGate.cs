@@ -252,12 +252,14 @@ namespace HotdVR
             }
 
             // While suspended the app submits no XR frames and the HMD would
-            // freeze/black out - fade the SteamVR compositor grid in instead
-            // (compositor-side only, zero game-rendering crash surface).
+            // freeze/black out - fade the SteamVR compositor grid in and show
+            // the loading-hint overlay instead (both compositor-side only,
+            // zero game-rendering crash surface).
             if (LoadingScreenActive != gridFadedIn)
             {
                 gridFadedIn = LoadingScreenActive;
                 SetGridFade(gridFadedIn);
+                VRLoadingOverlay.SetVisible(gridFadedIn);
             }
         }
 

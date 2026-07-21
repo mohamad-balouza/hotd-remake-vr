@@ -104,6 +104,7 @@
     <MakeDir Directories="$(GamePath)\BepInEx\plugins\HotdVR" />
     <ItemGroup>
       <DeployDlls Include="$(TargetDir)HotdVR.dll;$(TargetDir)Unity.XR.OpenVR.dll;$(TargetDir)Unity.XR.Management.dll" />
+      <DeployDlls Include="$(MSBuildProjectDirectory)\..\..\assets\loading-overlay.png" />
     </ItemGroup>
     <Copy SourceFiles="@(DeployDlls)" DestinationFolder="$(GamePath)\BepInEx\plugins\HotdVR" />
   </Target>

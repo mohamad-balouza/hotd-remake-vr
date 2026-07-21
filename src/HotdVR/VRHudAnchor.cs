@@ -25,16 +25,17 @@ namespace HotdVR
 
         /// <summary>Converts the canvas to world space, scaled so it covers the
         /// same apparent field of view the camera-space version had at the same
-        /// distance, and starts driving its transform.</summary>
+        /// distance, and starts driving its transform. Called again whenever
+        /// the projector sees the canvas non-world-space: the game resets its
+        /// canvases to ScreenSpaceOverlay on UI refreshes, and a registered
+        /// canvas stuck in overlay mode is invisible in the headset (the round-2
+        /// invisible-HUD bug) - so the conversion must be re-applied, not
+        /// skipped, for known canvases.</summary>
         internal static void Register(Canvas canvas, Camera cam)
         {
             var rt = canvas.transform as RectTransform;
             if (rt == null || rt.rect.height <= 0f)
                 return; // layout not ready yet - the 1s re-scan will retry
-
-            for (int i = 0; i < entries.Count; i++)
-                if (ReferenceEquals(entries[i], rt))
-                    return;
 
             float dist = Mathf.Clamp(Plugin.Cfg.HudDistance.Value, 0.5f, 3f);
             float scale = 2f * dist * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) / rt.rect.height
@@ -42,6 +43,10 @@ namespace HotdVR
             canvas.renderMode = RenderMode.WorldSpace;
             canvas.worldCamera = cam; // event camera for uGUI raycasters
             rt.localScale = Vector3.one * scale;
+
+            for (int i = 0; i < entries.Count; i++)
+                if (ReferenceEquals(entries[i], rt))
+                    return; // known canvas: conversion re-applied silently
             entries.Add(rt);
             Plugin.Log.LogInfo($"[VRUi] canvas '{canvas.name}' -> world space (dist={dist:F1}m scale={scale:E2})");
         }
