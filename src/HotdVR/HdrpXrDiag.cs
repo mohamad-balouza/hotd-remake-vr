@@ -36,6 +36,7 @@ namespace HotdVR
             harmony.Patch(AccessTools.Method(hdrp, "TryCalculateFrameParameters"),
                 postfix: new HarmonyMethod(typeof(HdrpXrDiag), nameof(TryCalcPost)));
             harmony.Patch(AccessTools.Method(hdrp, "TryCull"),
+                prefix: new HarmonyMethod(typeof(HdrpXrDiag), nameof(TryCullValidatePre)),
                 postfix: new HarmonyMethod(typeof(HdrpXrDiag), nameof(TryCullPost)));
             harmony.Patch(AccessTools.Method(hdrp, "ExecuteWithRenderGraph"),
                 prefix: new HarmonyMethod(typeof(HdrpXrDiag), nameof(ExecutePre)));
@@ -43,6 +44,54 @@ namespace HotdVR
         }
 
         private static int calcCount, cullCount, execCount;
+        private static string lastCameraSet = "";
+        private static float lastInvalidLog;
+
+        private static bool IsFinite(in Matrix4x4 m)
+        {
+            for (int i = 0; i < 16; i++)
+                if (float.IsNaN(m[i]) || float.IsInfinity(m[i]))
+                    return false;
+            return true;
+        }
+
+        internal static int skippedFrames, renderedFrames;
+        private static bool loggedMatrixDetail;
+
+        // Defensive: during scene loads the XR provider can hand back degenerate
+        // culling data (observed: frustum warnings from GetCullingParameters
+        // followed by a native crash in ScriptableRenderContext.Submit). Skip
+        // rendering the camera for that frame instead of submitting garbage.
+        // Note: SteamVR's null driver produces degenerate matrices permanently,
+        // so under it every XR camera render is skipped (black HMD by design).
+        private static bool TryCullValidatePre(UnityEngine.Rendering.ScriptableCullingParameters cullingParams, ref bool __result)
+        {
+            var cull = cullingParams.cullingMatrix;
+            var stereoView = cullingParams.stereoViewMatrix;
+            var stereoProj = cullingParams.stereoProjectionMatrix;
+            bool valid = IsFinite(cull) && IsFinite(stereoView) && IsFinite(stereoProj)
+                         && Mathf.Abs(cull.determinant) > 1e-12f;
+            if (!valid)
+            {
+                skippedFrames++;
+                if (Time.realtimeSinceStartup - lastInvalidLog > 5f)
+                {
+                    lastInvalidLog = Time.realtimeSinceStartup;
+                    Plugin.Log.LogWarning($"[HdrpDiag] DEGENERATE culling params - skipping render (skipped={skippedFrames} rendered={renderedFrames})");
+                    if (!loggedMatrixDetail)
+                    {
+                        loggedMatrixDetail = true;
+                        Plugin.Log.LogWarning($"[HdrpDiag] cullingMatrix det={cull.determinant} finite={IsFinite(cull)}\n{cull}");
+                        Plugin.Log.LogWarning($"[HdrpDiag] stereoView finite={IsFinite(stereoView)}\n{stereoView}");
+                        Plugin.Log.LogWarning($"[HdrpDiag] stereoProj finite={IsFinite(stereoProj)}\n{stereoProj}");
+                    }
+                }
+                __result = false;
+                return false; // skip original TryCull
+            }
+            renderedFrames++;
+            return true;
+        }
 
         private static void TryCalcPost(Camera camera, object xrPass, bool __result)
         {
@@ -87,6 +136,20 @@ namespace HotdVR
         private static void SetupPre(Camera[] cameras, bool singlePassAllowed, bool singlePassTestModeActive)
         {
             setupCount++;
+            VRCameraGate.Enforce(cameras);
+
+            // Log whenever the camera composition changes (scene transitions).
+            var names = new List<string>();
+            foreach (var c in cameras)
+                if (c != null) names.Add(c.name);
+            names.Sort();
+            string set = string.Join("|", names);
+            if (set != lastCameraSet)
+            {
+                lastCameraSet = set;
+                Plugin.Log.LogInfo($"[HdrpDiag] camera set changed (frame {setupCount}): [{set}]");
+            }
+
             if (setupCount != 1 && setupCount % 300 != 0)
                 return;
 

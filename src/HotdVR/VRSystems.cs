@@ -11,11 +11,29 @@ namespace HotdVR
     /// </summary>
     public class VRSystems : MonoBehaviour
     {
+        private void Update()
+        {
+            if (!VRRuntimeBootstrap.Active && Input.GetKeyDown(KeyCode.F9))
+            {
+                Plugin.Log.LogInfo("[VR] F9 pressed - starting VR on demand");
+                StartCoroutine(StartVR());
+            }
+        }
+
         private IEnumerator Start()
         {
             // Let the engine finish its first frames before starting XR.
             yield return null;
             yield return null;
+
+            if (Plugin.Cfg.AutoStartVR.Value)
+                yield return StartVR();
+        }
+
+        private IEnumerator StartVR()
+        {
+            if (VRRuntimeBootstrap.Active)
+                yield break;
 
             // SteamVR can be momentarily busy (e.g. it is still launching, or a
             // previous app is releasing the session) - retry transient errors.
@@ -39,12 +57,14 @@ namespace HotdVR
                 yield break;
             }
 
-            // Log render state over the first seconds - GetRenderPassCount()==2
-            // proves HDRP picked up the display subsystem in multipass mode.
-            for (int i = 0; i < 6; i++)
+            // Log render state periodically - GetRenderPassCount()==2 proves
+            // HDRP picked up the display subsystem in multipass mode; the
+            // render-health counters show whether frames actually render.
+            int i = 0;
+            while (true)
             {
-                yield return new WaitForSeconds(2f);
-                LogStereoState(i);
+                yield return new WaitForSecondsRealtime(i < 6 ? 2f : 15f);
+                LogStereoState(i++);
             }
         }
 
@@ -65,7 +85,8 @@ namespace HotdVR
             Plugin.Log.LogInfo(
                 $"[VR/state{index}] running={d.running} renderPasses={passes} " +
                 $"camera='{(cam != null ? cam.name : "<none>")}' stereo={(cam != null && cam.stereoEnabled)} " +
-                $"eyeTex={XRSettings.eyeTextureWidth}x{XRSettings.eyeTextureHeight} device='{XRSettings.loadedDeviceName}'");
+                $"eyeTex={XRSettings.eyeTextureWidth}x{XRSettings.eyeTextureHeight} device='{XRSettings.loadedDeviceName}' " +
+                $"renderHealth: rendered={HdrpXrDiag.renderedFrames} skipped={HdrpXrDiag.skippedFrames}");
             DumpCameras($"state{index}");
         }
 
