@@ -84,7 +84,8 @@ namespace HotdVR
             LeftHanded = config.Bind("Controls", "LeftHanded", false,
                 "Aim with the left controller instead of the right.");
             ShowLaser = config.Bind("Controls", "ShowLaser", true,
-                "Show the laser pointer and 3D reticle from the aim hand.");
+                "Show the laser pointer and 3D reticle from the aim hand. Toggle in-game: hold the "
+                + "off-hand stick click 0.6s with the stick centered, or press F8.");
             AimPitchOffset = config.Bind("Controls", "AimPitchOffset", 45f,
                 "Downward tilt (degrees) of the aim ray relative to the controller, approximating a pistol barrel. 0 = controller forward.");
             LoadingGraceSeconds = config.Bind("Stability", "LoadingGraceSeconds", 1.5f,

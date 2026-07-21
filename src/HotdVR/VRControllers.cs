@@ -113,6 +113,52 @@ namespace HotdVR
             prevStickClick = stickClick; prevMenu = menu; prevStick = stick;
 
             UpdatePitchAdjust(rawOffStick.sqrMagnitude > 0.01f ? rawOffStick : stick, rawOffStickClick);
+            UpdateLaserToggle(rawOffStick.sqrMagnitude > 0.01f ? rawOffStick : stick, rawOffStickClick);
+        }
+
+        // Laser on/off: hold the off-hand stick click 0.6s with the stick
+        // CENTERED (deflecting cancels - that combination belongs to the aim
+        // tilt adjust). F8 as keyboard fallback. Persists via the config entry.
+        private HoldGesture laserToggleHold;
+
+        private void UpdateLaserToggle(Vector2 offStick, bool offStickClicked)
+        {
+            bool cancel = offStick.magnitude > 0.3f;
+            bool fired = laserToggleHold.Update(offStickClicked, cancel, 0.6f, Time.realtimeSinceStartup);
+            if (fired || Input.GetKeyDown(KeyCode.F8))
+            {
+                bool show = !Plugin.Cfg.ShowLaser.Value;
+                Plugin.Cfg.ShowLaser.Value = show; // persists to cfg
+                Plugin.Log.LogInfo($"[VRCtl] laser {(show ? "enabled" : "disabled")} (saved to config)");
+            }
+        }
+
+        /// <summary>Fires exactly once when 'held' has been continuously true
+        /// for 'seconds' with 'cancel' never true during the hold; releasing
+        /// re-arms. Reusable for future long-press bindings.</summary>
+        private struct HoldGesture
+        {
+            private float downSince;
+            private bool fired, canceled;
+
+            public bool Update(bool held, bool cancel, float seconds, float now)
+            {
+                if (!held)
+                {
+                    downSince = 0f;
+                    fired = false;
+                    canceled = false;
+                    return false;
+                }
+                if (downSince == 0f)
+                    downSince = now;
+                if (cancel)
+                    canceled = true;
+                if (fired || canceled || now - downSince < seconds)
+                    return false;
+                fired = true;
+                return true;
+            }
         }
 
         private Vector2 rawAimStick;
