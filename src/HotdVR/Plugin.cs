@@ -40,6 +40,8 @@ namespace HotdVR
             var harmony = new HarmonyLib.Harmony(Guid);
             HdrpXrDiag.Apply(harmony);
             ComfortPatches.Apply(harmony);
+            VRAimPatches.Apply(harmony);
+            VRInputPatches.Apply(harmony);
 
             var runner = new GameObject("HotdVR");
             DontDestroyOnLoad(runner);
@@ -48,6 +50,7 @@ namespace HotdVR
             runner.AddComponent<EyeCapture>();
             runner.AddComponent<VRUiProjector>();
             runner.AddComponent<VRCameraRig>();
+            runner.AddComponent<VRControllers>();
         }
     }
 
@@ -57,6 +60,10 @@ namespace HotdVR
         public readonly ConfigEntry<bool> AutoStartVR;
         public readonly ConfigEntry<bool> ProjectUiToVR;
         public readonly ConfigEntry<bool> VerboseLogging;
+        public readonly ConfigEntry<bool> LeftHanded;
+        public readonly ConfigEntry<bool> ShowLaser;
+        public readonly ConfigEntry<float> AimPitchOffset;
+        public readonly ConfigEntry<float> RenderScale;
 
         public VRConfig(ConfigFile config)
         {
@@ -66,6 +73,14 @@ namespace HotdVR
                 "Start VR automatically shortly after boot. If false, press F9 in game to start VR.");
             ProjectUiToVR = config.Bind("UI", "ProjectUiToVR", true,
                 "Convert the game's 2D overlay UI (menus, HUD) to camera space so it is visible in the headset.");
+            LeftHanded = config.Bind("Controls", "LeftHanded", false,
+                "Aim with the left controller instead of the right.");
+            ShowLaser = config.Bind("Controls", "ShowLaser", true,
+                "Show the laser pointer and 3D reticle from the aim hand.");
+            AimPitchOffset = config.Bind("Controls", "AimPitchOffset", 15f,
+                "Downward tilt (degrees) of the aim ray relative to the controller, approximating a pistol barrel. 0 = controller forward.");
+            RenderScale = config.Bind("Performance", "RenderScale", 1.0f,
+                "Eye render target scale (0.5-1.5). Lower = sharper performance, softer image. Applied at VR start.");
             VerboseLogging = config.Bind("Debug", "VerboseLogging", true,
                 "Extra diagnostic logging (subsystem dumps, per-scene camera info).");
         }

@@ -79,7 +79,15 @@ namespace HotdVR
                 // boot; ours starts later, so set it before starting subsystems.
                 var disp = Loader.GetLoadedSubsystem<UnityEngine.XR.XRDisplaySubsystem>();
                 if (disp != null)
+                {
                     disp.sRGB = true;
+                    float scale = Mathf.Clamp(Plugin.Cfg.RenderScale.Value, 0.5f, 1.5f);
+                    if (!Mathf.Approximately(scale, 1f))
+                    {
+                        disp.scaleOfAllRenderTargets = scale;
+                        Plugin.Log.LogInfo($"[VR] eye render target scale = {scale}");
+                    }
+                }
 
                 Manager.StartSubsystems();
 

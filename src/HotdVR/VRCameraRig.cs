@@ -22,6 +22,20 @@ namespace HotdVR
         private Vector3 recenterPos;
         private Quaternion recenterRotInv = Quaternion.identity;
 
+        // Published so other systems (controllers) can map tracking-space poses
+        // into the same world frame the head uses.
+        internal static Vector3 BaseWorldPos;
+        internal static Quaternion BaseWorldRot = Quaternion.identity;
+        internal static Vector3 RecenterPos;
+        internal static Quaternion RecenterRotInv = Quaternion.identity;
+        internal static bool HasBase;
+
+        internal static Vector3 TrackingToWorldPos(Vector3 trackingPos) =>
+            BaseWorldPos + BaseWorldRot * (RecenterRotInv * (trackingPos - RecenterPos));
+
+        internal static Quaternion TrackingToWorldRot(Quaternion trackingRot) =>
+            BaseWorldRot * (RecenterRotInv * trackingRot);
+
         private void OnEnable()
         {
             Application.onBeforeRender += Apply;
@@ -89,6 +103,12 @@ namespace HotdVR
 
             cam.transform.rotation = baseRot * localRot;
             cam.transform.position = basePos + baseRot * localPos;
+
+            BaseWorldPos = basePos;
+            BaseWorldRot = baseRot;
+            RecenterPos = recenterPos;
+            RecenterRotInv = recenterRotInv;
+            HasBase = true;
         }
     }
 }
