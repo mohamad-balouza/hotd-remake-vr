@@ -86,24 +86,10 @@ namespace HotdVR
                 pinnedTick = OnNativeTick;
                 RegisterTickCallback(pinnedTick);
 
-                // This build ships HDRP with the (experimental in 10.x) render
-                // graph enabled, which renders black into XR passes. The classic
-                // path is intact in the assembly - switch to it while in VR.
-                if (Plugin.Cfg.DisableRenderGraph.Value)
-                {
-                    var pipeline = UnityEngine.Rendering.RenderPipelineManager.currentPipeline;
-                    var enableMethod = pipeline?.GetType().GetMethod("EnableRenderGraph",
-                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
-                    if (enableMethod != null)
-                    {
-                        enableMethod.Invoke(pipeline, new object[] { false });
-                        Plugin.Log.LogInfo("[VR] HDRP render graph disabled -> classic render path");
-                    }
-                    else
-                    {
-                        Plugin.Log.LogWarning("[VR] could not find HDRenderPipeline.EnableRenderGraph");
-                    }
-                }
+                // Note: switching HDRP to its classic (non render-graph) path via
+                // EnableRenderGraph(false) was tried here and crashes on level
+                // load in this build (native crash in ScriptableRenderContext.
+                // Submit). The render graph path must stay enabled.
 
                 Active = true;
                 var display = Loader.displaySubsystem;
