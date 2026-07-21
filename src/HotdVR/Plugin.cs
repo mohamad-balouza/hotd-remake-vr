@@ -50,16 +50,25 @@ namespace HotdVR
             runner.AddComponent<VRSystems>();
             runner.AddComponent<EyeCapture>();
             runner.AddComponent<VRUiProjector>();
+            runner.AddComponent<VRHudAnchor>();
             runner.AddComponent<VRCameraRig>();
             runner.AddComponent<VRControllers>();
         }
     }
+
+    internal enum HudMode { CameraSpace, WorldFollow }
 
     internal class VRConfig
     {
         public readonly ConfigEntry<bool> VREnabled;
         public readonly ConfigEntry<bool> AutoStartVR;
         public readonly ConfigEntry<bool> ProjectUiToVR;
+        public readonly ConfigEntry<HudMode> HudMode;
+        public readonly ConfigEntry<float> HudDistance;
+        public readonly ConfigEntry<float> HudScale;
+        public readonly ConfigEntry<float> HudFollowSpeed;
+        public readonly ConfigEntry<float> HudYawDeadzoneDegrees;
+        public readonly ConfigEntry<string> HudWorldSpaceCanvases;
         public readonly ConfigEntry<bool> VerboseLogging;
         public readonly ConfigEntry<bool> FrameTimeStats;
         public readonly ConfigEntry<bool> LeftHanded;
@@ -81,6 +90,22 @@ namespace HotdVR
                 "Start VR automatically shortly after boot. If false, press F9 in game to start VR.");
             ProjectUiToVR = config.Bind("UI", "ProjectUiToVR", true,
                 "Convert the game's 2D overlay UI (menus, HUD) to camera space so it is visible in the headset.");
+            HudMode = config.Bind("UI", "HudMode", HotdVR.HudMode.CameraSpace,
+                "CameraSpace: HUD rigidly head-locked at HudDistance (original behavior). WorldFollow: "
+                + "chapter HUD canvases float on a world-space panel that lazily follows the ride camera "
+                + "(cockpit style). Menus always stay camera-space.");
+            HudDistance = config.Bind("UI", "HudDistance", 1.2f,
+                "Distance (meters) of the projected UI plane / world HUD panel from the camera (0.5-3).");
+            HudScale = config.Bind("UI", "HudScale", 1.0f,
+                "Size multiplier of the world-space HUD panel (WorldFollow mode only, 0.2-3).");
+            HudFollowSpeed = config.Bind("UI", "HudFollowSpeed", 4.0f,
+                "How quickly the world-space HUD chases the ride camera (WorldFollow mode, higher = snappier).");
+            HudYawDeadzoneDegrees = config.Bind("UI", "HudYawDeadzoneDegrees", 25f,
+                "The world-space HUD ignores ride-camera heading changes smaller than this (degrees).");
+            HudWorldSpaceCanvases = config.Bind("UI", "HudWorldSpaceCanvases",
+                "canvas_MainCanvas,prefab_BossHPCanvas,prefab_DialogUI,prefab_HintsCanvas",
+                "Comma-separated canvas name prefixes that go world-space in WorldFollow mode. Everything "
+                + "else (pause/death/menus/fades) stays camera-space.");
             LeftHanded = config.Bind("Controls", "LeftHanded", false,
                 "Aim with the left controller instead of the right.");
             ShowLaser = config.Bind("Controls", "ShowLaser", true,
