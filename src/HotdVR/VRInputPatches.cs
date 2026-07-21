@@ -59,7 +59,7 @@ namespace HotdVR
                 {
                     case 9: __result |= VRControllers.ADown; return;         // Accept
                     case 10: __result |= VRControllers.BDown; return;        // Cancel
-                    case 16: __result |= VRControllers.MenuDown; return;     // Pause
+                    case 16: __result |= VRControllers.MenuDown || VRControllers.YDown; return; // Pause (menu btn or off-hand Y)
                     case 5: __result |= VRControllers.StickRightDown; return; // NavX +
                     case 6: __result |= VRControllers.StickUpDown; return;   // NavY +
                     case 17: __result |= VRControllers.StickLeftDown; return; // PageLeft

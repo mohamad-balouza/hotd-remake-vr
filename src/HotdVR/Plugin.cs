@@ -77,7 +77,7 @@ namespace HotdVR
                 "Aim with the left controller instead of the right.");
             ShowLaser = config.Bind("Controls", "ShowLaser", true,
                 "Show the laser pointer and 3D reticle from the aim hand.");
-            AimPitchOffset = config.Bind("Controls", "AimPitchOffset", 15f,
+            AimPitchOffset = config.Bind("Controls", "AimPitchOffset", 30f,
                 "Downward tilt (degrees) of the aim ray relative to the controller, approximating a pistol barrel. 0 = controller forward.");
             RenderScale = config.Bind("Performance", "RenderScale", 1.0f,
                 "Eye render target scale (0.5-1.5). Lower = sharper performance, softer image. Applied at VR start.");

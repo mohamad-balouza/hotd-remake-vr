@@ -1,5 +1,7 @@
+using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.XR;
+using Valve.VR;
 
 namespace HotdVR
 {
@@ -36,18 +38,20 @@ namespace HotdVR
         private Transform reticle;
         private Material laserMaterial;
 
+        private float nextDiagLog;
+        private bool loggedSource;
+
         private void Update()
         {
             if (!VRRuntimeBootstrap.Active)
                 return;
 
-            var aimHand = InputDevices.GetDeviceAtXRNode(
-                Plugin.Cfg.LeftHanded.Value ? XRNode.LeftHand : XRNode.RightHand);
-            var offHand = InputDevices.GetDeviceAtXRNode(
-                Plugin.Cfg.LeftHanded.Value ? XRNode.RightHand : XRNode.LeftHand);
+            bool leftHanded = Plugin.Cfg.LeftHanded.Value;
+            var aimHand = InputDevices.GetDeviceAtXRNode(leftHanded ? XRNode.LeftHand : XRNode.RightHand);
+            var offHand = InputDevices.GetDeviceAtXRNode(leftHanded ? XRNode.RightHand : XRNode.LeftHand);
 
-            // Buttons: trigger/grip/primary(A|X)/secondary(B|Y) from the aim
-            // hand, stick + menu from the off hand, primary2DAxisClick either.
+            // Source 1: Unity XR input features (may be unavailable in the
+            // provider's legacy input mode - poses work but buttons may not).
             aimHand.TryGetFeatureValue(CommonUsages.triggerButton, out bool trigger);
             aimHand.TryGetFeatureValue(CommonUsages.gripButton, out bool grip);
             aimHand.TryGetFeatureValue(CommonUsages.primaryButton, out bool a);
@@ -57,6 +61,32 @@ namespace HotdVR
             offHand.TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 stick);
             offHand.TryGetFeatureValue(CommonUsages.menuButton, out bool menu);
             aimHand.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out bool stickClick);
+            bool xrAny = trigger || grip || a || b || x || y || menu || stickClick || stick.sqrMagnitude > 0.04f;
+
+            // Source 2: raw OpenVR legacy controller state - works whenever the
+            // runtime is up (same pipe the poses come from).
+            if (ReadRawOpenVR(leftHanded, out var raw))
+            {
+                trigger |= raw.trigger; grip |= raw.grip; a |= raw.a; b |= raw.b;
+                x |= raw.x; y |= raw.y; stickClick |= raw.stickClick; menu |= raw.menu;
+                if (stick.sqrMagnitude < 0.04f && raw.stick.sqrMagnitude >= 0.04f)
+                    stick = raw.stick;
+                if (!loggedSource && (raw.trigger || raw.grip || raw.a || raw.b))
+                {
+                    loggedSource = true;
+                    Plugin.Log.LogInfo($"[VRCtl] raw OpenVR input active (XR features {(xrAny ? "also" : "NOT")} delivering)");
+                }
+            }
+            if (!loggedSource && xrAny)
+            {
+                loggedSource = true;
+                Plugin.Log.LogInfo("[VRCtl] XR InputDevices features delivering input");
+            }
+            if (Plugin.Cfg.VerboseLogging.Value && Time.realtimeSinceStartup > nextDiagLog)
+            {
+                nextDiagLog = Time.realtimeSinceStartup + 5f;
+                Plugin.Log.LogInfo($"[VRCtl] aimValid={aimHand.isValid} trig={trigger} grip={grip} a={a} b={b} x={x} y={y} stick={stick} click={stickClick} menu={menu}");
+            }
 
             TriggerHeld = trigger; TriggerDown = trigger && !prevTrigger; TriggerUp = !trigger && prevTrigger;
             GripHeld = grip; GripDown = grip && !prevGrip;
@@ -75,6 +105,53 @@ namespace HotdVR
 
             prevTrigger = trigger; prevGrip = grip; prevA = a; prevB = b; prevX = x; prevY = y;
             prevStickClick = stickClick; prevMenu = menu; prevStick = stick;
+        }
+
+        private struct RawButtons
+        {
+            public bool trigger, grip, a, b, x, y, stickClick, menu;
+            public Vector2 stick;
+        }
+
+        // Legacy Oculus Touch mapping via SteamVR: trigger=SteamVR_Trigger(33),
+        // grip=Grip(2), A/X=A(7), B/Y=ApplicationMenu(1), stick=axis0 with
+        // Touchpad(32) as the click.
+        private static bool ReadRawOpenVR(bool leftHanded, out RawButtons result)
+        {
+            result = default;
+            var system = OpenVR.System;
+            if (system == null)
+                return false;
+
+            uint aimIndex = system.GetTrackedDeviceIndexForControllerRole(
+                leftHanded ? ETrackedControllerRole.LeftHand : ETrackedControllerRole.RightHand);
+            uint offIndex = system.GetTrackedDeviceIndexForControllerRole(
+                leftHanded ? ETrackedControllerRole.RightHand : ETrackedControllerRole.LeftHand);
+
+            uint size = (uint)Marshal.SizeOf(typeof(VRControllerState_t));
+            VRControllerState_t state = default;
+            bool any = false;
+
+            if (aimIndex != OpenVR.k_unTrackedDeviceIndexInvalid && system.GetControllerState(aimIndex, ref state, size))
+            {
+                ulong pressed = state.ulButtonPressed;
+                result.trigger = (pressed & (1UL << (int)EVRButtonId.k_EButton_SteamVR_Trigger)) != 0 || state.rAxis1.x > 0.75f;
+                result.grip = (pressed & (1UL << (int)EVRButtonId.k_EButton_Grip)) != 0;
+                result.a = (pressed & (1UL << (int)EVRButtonId.k_EButton_A)) != 0;
+                result.b = (pressed & (1UL << (int)EVRButtonId.k_EButton_ApplicationMenu)) != 0;
+                result.stickClick = (pressed & (1UL << (int)EVRButtonId.k_EButton_SteamVR_Touchpad)) != 0;
+                any = true;
+            }
+            state = default;
+            if (offIndex != OpenVR.k_unTrackedDeviceIndexInvalid && system.GetControllerState(offIndex, ref state, size))
+            {
+                ulong pressed = state.ulButtonPressed;
+                result.x = (pressed & (1UL << (int)EVRButtonId.k_EButton_A)) != 0;
+                result.y = (pressed & (1UL << (int)EVRButtonId.k_EButton_ApplicationMenu)) != 0;
+                result.stick = new Vector2(state.rAxis0.x, state.rAxis0.y);
+                any = true;
+            }
+            return any;
         }
 
         private void LateUpdate()
