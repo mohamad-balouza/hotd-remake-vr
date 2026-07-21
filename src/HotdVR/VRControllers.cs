@@ -65,8 +65,10 @@ namespace HotdVR
 
             // Source 2: raw OpenVR legacy controller state - works whenever the
             // runtime is up (same pipe the poses come from).
+            rawAimStick = Vector2.zero;
             if (ReadRawOpenVR(leftHanded, out var raw))
             {
+                rawAimStick = raw.aimStick;
                 trigger |= raw.trigger; grip |= raw.grip; a |= raw.a; b |= raw.b;
                 x |= raw.x; y |= raw.y; stickClick |= raw.stickClick; menu |= raw.menu;
                 if (stick.sqrMagnitude < 0.04f && raw.stick.sqrMagnitude >= 0.04f)
@@ -105,12 +107,47 @@ namespace HotdVR
 
             prevTrigger = trigger; prevGrip = grip; prevA = a; prevB = b; prevX = x; prevY = y;
             prevStickClick = stickClick; prevMenu = menu; prevStick = stick;
+
+            UpdatePitchAdjust(rawAimStick);
         }
+
+        private Vector2 rawAimStick;
 
         private struct RawButtons
         {
             public bool trigger, grip, a, b, x, y, stickClick, menu;
             public Vector2 stick;
+            public Vector2 aimStick;
+        }
+
+        // Live-adjustable aim tilt: aim-hand stick up/down (or PageUp/PageDown)
+        // changes it in-game; committed to the config file on release.
+        internal static float LivePitch = float.NaN;
+        private bool pitchDirty;
+
+        private void UpdatePitchAdjust(Vector2 aimStick)
+        {
+            if (float.IsNaN(LivePitch))
+                LivePitch = Plugin.Cfg.AimPitchOffset.Value;
+
+            float delta = 0f;
+            if (Mathf.Abs(aimStick.y) > 0.7f)
+                delta = -aimStick.y * 20f * Time.unscaledDeltaTime; // stick up = aim higher = less tilt
+            if (Input.GetKey(KeyCode.PageDown)) delta += 20f * Time.unscaledDeltaTime;
+            if (Input.GetKey(KeyCode.PageUp)) delta -= 20f * Time.unscaledDeltaTime;
+
+            if (delta != 0f)
+            {
+                LivePitch = Mathf.Clamp(LivePitch + delta, -10f, 80f);
+                pitchDirty = true;
+            }
+            else if (pitchDirty)
+            {
+                pitchDirty = false;
+                LivePitch = Mathf.Round(LivePitch * 2f) / 2f;
+                Plugin.Cfg.AimPitchOffset.Value = LivePitch; // persists to cfg
+                Plugin.Log.LogInfo($"[VRCtl] AimPitchOffset saved: {LivePitch:F1}");
+            }
         }
 
         private static ulong lastAimMask, lastOffMask;
@@ -143,6 +180,7 @@ namespace HotdVR
                 result.a = (pressed & (1UL << (int)EVRButtonId.k_EButton_A)) != 0;
                 result.b = (pressed & (1UL << (int)EVRButtonId.k_EButton_ApplicationMenu)) != 0;
                 result.stickClick = (pressed & (1UL << (int)EVRButtonId.k_EButton_SteamVR_Touchpad)) != 0;
+                result.aimStick = new Vector2(state.rAxis0.x, state.rAxis0.y);
                 any = true;
 
                 // Discovery logging: every press/release logs the exact raw mask
@@ -196,7 +234,8 @@ namespace HotdVR
             Quaternion worldRot = VRCameraRig.TrackingToWorldRot(rot);
             // Tilt the aim axis down a little from the controller's forward so
             // it points like a pistol barrel rather than along the flat top.
-            Vector3 dir = worldRot * Quaternion.Euler(Plugin.Cfg.AimPitchOffset.Value, 0f, 0f) * Vector3.forward;
+            float pitch = float.IsNaN(LivePitch) ? Plugin.Cfg.AimPitchOffset.Value : LivePitch;
+            Vector3 dir = worldRot * Quaternion.Euler(pitch, 0f, 0f) * Vector3.forward;
             AimRay = new Ray(worldPos, dir);
             AimValid = true;
 
