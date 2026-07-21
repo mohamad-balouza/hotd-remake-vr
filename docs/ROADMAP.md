@@ -1,8 +1,32 @@
-# Roadmap
+# Roadmap / next steps
 
-Status after the initial sessions (2026-07-21): Chapter 1 fully playable in VR —
-stereo, 6DOF, motion-controller aiming, all buttons, menus navigable, comfort
-patches in. Repo builds + auto-deploys; docs in place.
+Status (2026-07-21, end of session 2): fully playable in VR — stereo, 6DOF,
+controller aiming, menus stick-navigable, in-game HUD visible, gun model with
+ammo/health pips, laser toggle, loading cards, comfort patches, perf cuts.
+User verdict: everything working; remaining polish parked below by choice.
+
+## NEXT SESSION — user-chosen focus
+
+0. **First: confirm the transition fix** — user replays chapter 1 → 2 a
+   couple of times (the mode-aware cull repair shipped un-headset-tested;
+   see section 1 root cause #2).
+1. **Proper gun mesh** (replace the primitive placeholder):
+   - Preferred: bundle a license-checked free low-poly gun model (CC0; check
+     attribution requirements before committing any asset) in `assets/` and
+     load it at runtime with a small OBJ parser (~100 lines; no Unity Editor
+     on this machine → no AssetBundles). HDRP/Lit material, per-WeaponType
+     model or shared base + accents, keep `GunModelZOffset`/laser alignment.
+   - Alternative (authentic but fragile): additively load the armory scene
+     once and clone `HD_PreviewWeapon` renderer subtrees (see DEVNOTES).
+2. **Proper health/bullets UI** (replace the pip readout):
+   - Trick worth trying first: reuse the GAME's own sprites at runtime — the
+     HUD torch sprites (`HD_HealthTorchUI` full/empty Images), the weapon
+     icons (`HD_Weapon.Icon`), and the crosshair ammo ring sprite — drawn on
+     a mod-owned world-space canvas anchored near the gun/wrist. Authentic
+     look, zero shipped game assets.
+   - Needs: readable at gun depth (or small ZTest-Always UI material), fed
+     from `Ammo/MagazineSize/IsReloading` + `HealthScript.HealthCurrent`
+     (+ score via `HD_ScoreManager.Instance.GetPlayerTotalScore`).
 
 ## 1. Stability — chapter transitions
 
@@ -68,11 +92,14 @@ patches in. Repo builds + auto-deploys; docs in place.
   verification pending.
 - WorldFollow HUD stays EXPERIMENTAL: needs a ZTest-Always UI material pass
   (world canvases vanish into corridor geometry) before it can be default.
-- Remaining: menu interaction via laser-pointer UI clicking (uGUI raycaster
-  on the controller ray); subtitle/dialog placement during cutscenes;
-  nicer gun mesh (user request, low priority — runtime OBJ loader for a
-  CC0 model, or clone armory `HD_PreviewWeapon` renderers via additive
-  scene load; both deferred); possible HUD element splitting.
+- Gun mesh + proper health/bullets UI: promoted to the NEXT SESSION section
+  at the top.
+- Parked by user choice (2026-07-21, "everything else is good for now"):
+  menu interaction via laser-pointer UI clicking (uGUI raycaster on the
+  controller ray); subtitle/dialog placement during cutscenes; possible HUD
+  element splitting; further perf levers (section 2); WorldFollow HUD
+  ZTest-Always pass; OpenVR overlay showing the real loading texture;
+  game-over/menu-return/photo-mode/bestiary transition testing.
 
 ## 4. Release engineering (M7)
 
