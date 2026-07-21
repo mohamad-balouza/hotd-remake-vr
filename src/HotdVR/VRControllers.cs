@@ -113,6 +113,9 @@ namespace HotdVR
             public Vector2 stick;
         }
 
+        private static ulong lastAimMask, lastOffMask;
+        private static float lastAxisLog;
+
         // Legacy Oculus Touch mapping via SteamVR: trigger=SteamVR_Trigger(33),
         // grip=Grip(2), A/X=A(7), B/Y=ApplicationMenu(1), stick=axis0 with
         // Touchpad(32) as the click.
@@ -136,11 +139,20 @@ namespace HotdVR
             {
                 ulong pressed = state.ulButtonPressed;
                 result.trigger = (pressed & (1UL << (int)EVRButtonId.k_EButton_SteamVR_Trigger)) != 0 || state.rAxis1.x > 0.75f;
-                result.grip = (pressed & (1UL << (int)EVRButtonId.k_EButton_Grip)) != 0;
+                result.grip = (pressed & (1UL << (int)EVRButtonId.k_EButton_Grip)) != 0 || state.rAxis2.x > 0.75f;
                 result.a = (pressed & (1UL << (int)EVRButtonId.k_EButton_A)) != 0;
                 result.b = (pressed & (1UL << (int)EVRButtonId.k_EButton_ApplicationMenu)) != 0;
                 result.stickClick = (pressed & (1UL << (int)EVRButtonId.k_EButton_SteamVR_Touchpad)) != 0;
                 any = true;
+
+                // Discovery logging: every press/release logs the exact raw mask
+                // + axes so the active runtime's legacy layout can be mapped.
+                if (pressed != lastAimMask || (Time.realtimeSinceStartup - lastAxisLog > 3f && (state.rAxis1.x > 0.05f || state.rAxis2.x > 0.05f || Mathf.Abs(state.rAxis0.x) + Mathf.Abs(state.rAxis0.y) > 0.1f)))
+                {
+                    lastAimMask = pressed;
+                    lastAxisLog = Time.realtimeSinceStartup;
+                    Plugin.Log.LogInfo($"[VRCtl/RAW aim] pressed=0x{pressed:X} touched=0x{state.ulButtonTouched:X} ax0=({state.rAxis0.x:F2},{state.rAxis0.y:F2}) ax1=({state.rAxis1.x:F2}) ax2=({state.rAxis2.x:F2}) ax3=({state.rAxis3.x:F2}) ax4=({state.rAxis4.x:F2})");
+                }
             }
             state = default;
             if (offIndex != OpenVR.k_unTrackedDeviceIndexInvalid && system.GetControllerState(offIndex, ref state, size))
@@ -150,6 +162,12 @@ namespace HotdVR
                 result.y = (pressed & (1UL << (int)EVRButtonId.k_EButton_ApplicationMenu)) != 0;
                 result.stick = new Vector2(state.rAxis0.x, state.rAxis0.y);
                 any = true;
+
+                if (pressed != lastOffMask)
+                {
+                    lastOffMask = pressed;
+                    Plugin.Log.LogInfo($"[VRCtl/RAW off] pressed=0x{pressed:X} touched=0x{state.ulButtonTouched:X} ax0=({state.rAxis0.x:F2},{state.rAxis0.y:F2}) ax1=({state.rAxis1.x:F2}) ax2=({state.rAxis2.x:F2})");
+                }
             }
             return any;
         }
