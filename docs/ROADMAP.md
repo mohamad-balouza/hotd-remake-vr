@@ -7,27 +7,33 @@ patches in. Repo builds + auto-deploys; docs in place.
 ## 1. Stability — chapter transitions (NEXT, highest priority)
 
 - The game crashed (native `ScriptableRenderContext.Submit`) when loading
-  chapter 2 after finishing chapter 1. Mitigation shipped and unverified:
-  XR passes are suspended while `camera_Loading` is present
-  (`VRCameraGate.LoadingScreenActive`).
-- **Verify**: user plays a chapter to completion and transitions to the next.
-  If it still crashes, the log's last `[VRGate]`/`[HdrpDiag]` lines before the
-  Player.log stack identify the frame; likely follow-ups: extend the suspension
-  window a few seconds past load end, also suspend during `HD_Cutscene` starts,
-  or validate the XR pass renderTarget before submitting.
+  chapter 2 after finishing chapter 1. Root-cause insight (2026-07-21): the
+  original presence-only gate resumed XR every other frame during loads
+  (`camera_Loading` A/B set alternation) — see DEVNOTES. Shipped fix: 3-state
+  gate with a `Stability.LoadingGraceSeconds` (1.5s realtime) suspension tail,
+  plus resume diagnostics (enriched `[VRGate]` lines + 120-frame un-throttled
+  window) so any remaining crash is attributable from the log tail.
+- Headless-verified across the boot load (suspend → grace → resume with a
+  reloaded camera identity). **Verify**: user plays chapter 1 → 2. If it
+  still crashes: bump the grace duration, suspend during `HD_Cutscene` starts
+  (needs decompile — no reference in src yet), or validate the XR pass
+  renderTarget pre-submit (promote `ExecutePre` to a skip-capable bool prefix
+  modeled on `TryCullValidatePre`).
 - Also worth testing: game over → continue, returning to main menu from a
   chapter, photo mode, bestiary/gallery.
 
-## 2. Performance (user checkpoint pending)
+## 2. Performance (instrumented; read numbers from the next playthrough)
 
+- Measurement shipped 2026-07-21: `[VR/stateN]` emits `frametime(cpu)` and
+  `render(cpu-submit)` p50/p95/p99/max every 15s (`Debug.FrameTimeStats`).
+  Budget at VD 72Hz = 13.9ms. Read the user's chapter-run log before touching
+  any lever; if p95 fits the budget, skip the levers entirely.
 - Current levers: `RenderScale` (biggest), DisableSSR/ContactShadows (default
   on), DisableVolumetrics/SSAO (opt-in), VD resolution preset, motion blur off
   in game settings.
 - Candidates: shadow resolution/distance caps via volume overrides, LOD bias,
   reducing HDRP color buffer format, `XRSettings.renderViewportScale` dynamic
   scaling, capping refresh (72Hz in VD), reflection probe update throttling.
-- Measure first: SRDebugger ships in the game; or log frame times around
-  `HDRenderPipeline.Render` to attribute cost before cutting features.
 
 ## 3. UI polish (M6)
 

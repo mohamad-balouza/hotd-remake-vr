@@ -36,10 +36,13 @@ dotnet build src/HotdVR/HotdVR.csproj -c Release
    CURSOR ignores SetCursorPos — game uses raw deltas; keyboard: Enter=Accept,
    Esc=Back, arrows=nav, but menu highlight is hard to read from screenshots)
 5. Window screenshots of the occluded game window: PrintWindow with flag 2
-6. SteamVR **null driver** gives a real XR session without a headset BUT its
-   poses/culling matrices are permanently NaN → eye textures stay black and
-   every XR camera render is guard-skipped. Fine for lifecycle/crash testing,
-   useless for visual verification. Enable/disable it by editing
+6. SteamVR **null driver** gives a real XR session without a headset. As of
+   2026-07-21 its culling params come out mostly FINITE (second eye repaired
+   from the first) → XR passes actually render AND submit headless — good for
+   crash testing the real Submit path; still useless for visual verification.
+   A cold SteamVR start via the game may drop the null HMD once ("Device
+   disconnected (stopping provider)") which cleanly quits the game — relaunch;
+   the second boot is stable. Enable/disable it by editing
    `C:\Program Files (x86)\Steam\config\steamvr.vrsettings` (ALWAYS back up and
    restore — `forcedDriver: null` left behind breaks Virtual Desktop!)
 7. Real rendering/input verification requires the user with the headset —

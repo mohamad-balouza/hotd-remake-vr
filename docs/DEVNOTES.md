@@ -74,12 +74,24 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
    practice the left eye's, IPD offset only) or the render is skipped.
    Repair = right eye renders; skip = safe black frame.
 3. **Chapter transitions** (camera churn while loading) — crashed at the frame
-   the next chapter's `cam_MainCamera` appeared. Mitigation: XR passes fully
-   suspended while a `camera_Loading` camera is present
-   (`VRCameraGate.LoadingScreenActive`). Shipped, NOT yet verified by a user
-   playthrough across a transition.
-- SteamVR **null driver** produces permanently-NaN poses → all XR renders are
-  guard-skipped → black eyes headless. Artifact of the null driver only.
+   the next chapter's `cam_MainCamera` appeared. CRITICAL FINDING (2026-07-21):
+   `camera_Loading` is absent from SetupFrame's camera array EVERY OTHER FRAME
+   mid-load (the A/B set alternation), so the original presence-only gate
+   resumed XR every second frame throughout the load — observed live with
+   grace=0. Mitigation now: 3-state gate (Rendering/Suspended/Grace) — the
+   suspension only lifts once the loading camera has been gone continuously
+   for `Stability.LoadingGraceSeconds` (default 1.5s, realtime; timer restarts
+   on every reappearance). Headless-verified across the boot load (suspend →
+   grace → resume, reloaded camera identity picked up correctly); user
+   chapter 1→2 playthrough still pending.
+- SteamVR **null driver** (re-tested 2026-07-21): culling params come out
+  mostly FINITE (second eye repaired from the first) — XR passes actually
+  render and submit headless, so the null driver now exercises the real
+  Submit path, better for crash testing than the old "permanently NaN"
+  behavior suggested (that behavior did not reproduce). Caveat: cold-starting
+  SteamVR via the game can drop the null HMD once ("Device disconnected
+  (stopping provider)"), which cleanly quits the game through the OpenVR quit
+  event — relaunch; the second boot with vrserver already up is stable.
 
 ## Head tracking & controllers
 
@@ -134,6 +146,19 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
 
 - `[VR/stateN]` every 15s: renderPasses, eyeTex dims, renderHealth
   (rendered/repaired/skipped counters — skipped spikes = provider pose trouble)
+- `[VR/stateN]` also emits `frametime(cpu)` and `render(cpu-submit)`
+  p50/p95/p99/max lines (`FrameStats` ring buffer, 2048 samples; suspended
+  loading/grace frames excluded from percentiles but counted as
+  `suspendedFrames=`). `render(cpu-submit)` = main-thread time inside
+  `ExecuteWithRenderGraph` summed per frame — NOT GPU time. Kill switch:
+  `Debug.FrameTimeStats`.
+- `[VRGate]` suspend/resume/camera-change lines carry frame number, camera
+  identity, camera set and renderHealth. Every gate state change stamps
+  `VRCameraGate.LastStateChangeFrame`, opening a 120-frame `InDiagWindow`
+  in which the ExecutePre / cull-repair / cull-skip log throttles are
+  bypassed and SetupFrame logs a per-frame camera-set timeline (needs
+  `VerboseLogging`) — the frames around a transition resume are fully
+  attributable from the log tail.
 - `[HdrpDiag] camera set changed` on composition changes (A/B flap suppressed)
 - `[VRCtl]` button snapshot every 5s + `[VRCtl/RAW]` on every raw mask change
 - `EyeCapture` writes `BepInEx\eyecap_{0..3}.png` — readback of the mirror
