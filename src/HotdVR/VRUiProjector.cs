@@ -33,6 +33,17 @@ namespace HotdVR
 
             foreach (var canvas in FindObjectsOfType<Canvas>())
             {
+                // The 2D crosshair is replaced by the 3D laser/reticle: keep its
+                // canvas out of the headset entirely (and its pixel math intact).
+                if (canvas.GetComponentInChildren<HD_Crosshair>(true) != null)
+                {
+                    if (canvas.enabled)
+                    {
+                        canvas.enabled = false;
+                        Plugin.Log.LogInfo($"[VRUi] crosshair canvas '{canvas.name}' hidden in VR");
+                    }
+                    continue;
+                }
                 if (canvas.renderMode == RenderMode.ScreenSpaceOverlay)
                 {
                     canvas.renderMode = RenderMode.ScreenSpaceCamera;
