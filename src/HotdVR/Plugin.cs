@@ -53,6 +53,7 @@ namespace HotdVR
             runner.AddComponent<VRHudAnchor>();
             runner.AddComponent<VRCameraRig>();
             runner.AddComponent<VRControllers>();
+            runner.AddComponent<VRGunModel>();
         }
     }
 
@@ -73,6 +74,7 @@ namespace HotdVR
         public readonly ConfigEntry<bool> FrameTimeStats;
         public readonly ConfigEntry<bool> LeftHanded;
         public readonly ConfigEntry<bool> ShowLaser;
+        public readonly ConfigEntry<bool> ShowGunModel;
         public readonly ConfigEntry<float> AimPitchOffset;
         public readonly ConfigEntry<float> LoadingGraceSeconds;
         public readonly ConfigEntry<bool> PromptPhaseXR;
@@ -111,6 +113,8 @@ namespace HotdVR
             ShowLaser = config.Bind("Controls", "ShowLaser", true,
                 "Show the laser pointer and 3D reticle from the aim hand. Toggle in-game: hold the "
                 + "off-hand stick click 0.6s with the stick centered, or press F8.");
+            ShowGunModel = config.Bind("Controls", "ShowGunModel", true,
+                "Show a simple gun model in the aim hand, matching the current weapon type.");
             AimPitchOffset = config.Bind("Controls", "AimPitchOffset", 45f,
                 "Downward tilt (degrees) of the aim ray relative to the controller, approximating a pistol barrel. 0 = controller forward.");
             LoadingGraceSeconds = config.Bind("Stability", "LoadingGraceSeconds", 1.5f,

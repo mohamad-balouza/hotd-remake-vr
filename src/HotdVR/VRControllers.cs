@@ -16,6 +16,7 @@ namespace HotdVR
         // --- shared state consumed by patches ---
         internal static bool AimValid;
         internal static Ray AimRay;                 // world space
+        internal static Quaternion AimWorldRot;     // full aim rotation incl. pitch tilt (for the gun model)
         internal static Vector3 AimHitPoint;        // world space
         internal static Vector2 AimViewport;        // 0..1 when on screen
         internal static bool AimOnScreen;
@@ -291,7 +292,8 @@ namespace HotdVR
             // Tilt the aim axis down a little from the controller's forward so
             // it points like a pistol barrel rather than along the flat top.
             float pitch = float.IsNaN(LivePitch) ? Plugin.Cfg.AimPitchOffset.Value : LivePitch;
-            Vector3 dir = worldRot * Quaternion.Euler(pitch, 0f, 0f) * Vector3.forward;
+            AimWorldRot = worldRot * Quaternion.Euler(pitch, 0f, 0f);
+            Vector3 dir = AimWorldRot * Vector3.forward;
             AimRay = new Ray(worldPos, dir);
             AimValid = true;
 
