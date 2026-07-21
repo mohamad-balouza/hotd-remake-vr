@@ -11,8 +11,13 @@ namespace HotdVR
     /// </summary>
     public class VRSystems : MonoBehaviour
     {
+        private static readonly FrameStats cpuStats = new FrameStats();
+
         private void Update()
         {
+            if (VRRuntimeBootstrap.Active && Plugin.Cfg.FrameTimeStats.Value)
+                cpuStats.Add(Time.unscaledDeltaTime * 1000f, VRCameraGate.LoadingScreenActive);
+
             if (!VRRuntimeBootstrap.Active && Input.GetKeyDown(KeyCode.F9))
             {
                 Plugin.Log.LogInfo("[VR] F9 pressed - starting VR on demand");
@@ -87,6 +92,11 @@ namespace HotdVR
                 $"camera='{(cam != null ? cam.name : "<none>")}' stereo={(cam != null && cam.stereoEnabled)} " +
                 $"eyeTex={XRSettings.eyeTextureWidth}x{XRSettings.eyeTextureHeight} device='{XRSettings.loadedDeviceName}' " +
                 $"renderHealth: rendered={HdrpXrDiag.renderedFrames} repaired={HdrpXrDiag.repairedFrames} skipped={HdrpXrDiag.skippedFrames}");
+            if (Plugin.Cfg.FrameTimeStats.Value)
+            {
+                Plugin.Log.LogInfo($"[VR/state{index}] {cpuStats.EmitAndReset("frametime(cpu)")}");
+                Plugin.Log.LogInfo($"[VR/state{index}] {HdrpXrDiag.EmitRenderStats()}");
+            }
             DumpCameras($"state{index}");
         }
 

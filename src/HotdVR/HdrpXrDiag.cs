@@ -40,7 +40,8 @@ namespace HotdVR
                 prefix: new HarmonyMethod(typeof(HdrpXrDiag), nameof(TryCullValidatePre)),
                 postfix: new HarmonyMethod(typeof(HdrpXrDiag), nameof(TryCullPost)));
             harmony.Patch(AccessTools.Method(hdrp, "ExecuteWithRenderGraph"),
-                prefix: new HarmonyMethod(typeof(HdrpXrDiag), nameof(ExecutePre)));
+                prefix: new HarmonyMethod(typeof(HdrpXrDiag), nameof(ExecutePre)),
+                postfix: new HarmonyMethod(typeof(HdrpXrDiag), nameof(ExecutePost)));
             Plugin.Log.LogInfo("[HdrpDiag] XRSystem+HDRP patches applied");
         }
 
@@ -135,8 +136,44 @@ namespace HotdVR
                 Plugin.Log.LogInfo($"[HdrpDiag] TryCull #{cullCount} cam='{camera.name}' result={__result}");
         }
 
+        // Main-thread time spent inside ExecuteWithRenderGraph (render-graph
+        // compile + command submission), summed across the calls of one frame
+        // (multipass = 2 XR calls + any flat cameras). NOT GPU time, but the
+        // right number for attributing HDRP-side CPU cost per frame.
+        private static readonly FrameStats renderStats = new FrameStats();
+        private static readonly double msPerTick = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        private static long execStartTicks;
+        private static int execFrame = -1;
+        private static float frameAccumMs;
+        private static bool frameWasSuspended;
+
+        internal static string EmitRenderStats() => renderStats.EmitAndReset("render(cpu-submit)");
+
+        private static void ExecutePost()
+        {
+            if (execStartTicks != 0)
+            {
+                frameAccumMs += (float)((System.Diagnostics.Stopwatch.GetTimestamp() - execStartTicks) * msPerTick);
+                execStartTicks = 0;
+            }
+        }
+
         private static void ExecutePre(object renderRequest)
         {
+            if (VRRuntimeBootstrap.Active && Plugin.Cfg.FrameTimeStats.Value)
+            {
+                int f = Time.frameCount;
+                if (f != execFrame)
+                {
+                    if (execFrame >= 0)
+                        renderStats.Add(frameAccumMs, frameWasSuspended);
+                    execFrame = f;
+                    frameAccumMs = 0f;
+                    frameWasSuspended = VRCameraGate.LoadingScreenActive;
+                }
+                execStartTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+            }
+
             execCount++;
             // Un-throttled inside the gate's diagnostic window: the resume
             // frames after a load are where the transition crash lived, and

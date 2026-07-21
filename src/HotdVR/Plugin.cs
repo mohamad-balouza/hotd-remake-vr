@@ -61,6 +61,7 @@ namespace HotdVR
         public readonly ConfigEntry<bool> AutoStartVR;
         public readonly ConfigEntry<bool> ProjectUiToVR;
         public readonly ConfigEntry<bool> VerboseLogging;
+        public readonly ConfigEntry<bool> FrameTimeStats;
         public readonly ConfigEntry<bool> LeftHanded;
         public readonly ConfigEntry<bool> ShowLaser;
         public readonly ConfigEntry<float> AimPitchOffset;
@@ -102,6 +103,8 @@ namespace HotdVR
                 "Disable screen-space ambient occlusion in VR (moderate GPU win, flattens lighting).");
             VerboseLogging = config.Bind("Debug", "VerboseLogging", true,
                 "Extra diagnostic logging (subsystem dumps, per-scene camera info).");
+            FrameTimeStats = config.Bind("Debug", "FrameTimeStats", true,
+                "Collect CPU frame-time and HDRP submit-time percentiles, reported in the periodic [VR/state] lines.");
         }
     }
 }
