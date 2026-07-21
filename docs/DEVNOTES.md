@@ -73,6 +73,16 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
    REPLACED with the same camera's last valid params (≤5 frames old — in
    practice the left eye's, IPD offset only) or the render is skipped.
    Repair = right eye renders; skip = safe black frame.
+   **MODE-AWARE since 2026-07-21**: the cache tags entries with whether they
+   came from an XR pass (`HDCamera.xr.enabled` via the TryCull `hdCamera`
+   param), and an XR pass may only be repaired from an XR entry. Root cause:
+   at post-load resume the camera's freshest cache is from its FLAT renders
+   during the loading screen; when the provider NaN'd on the exact resume
+   frame, the repair substituted mono params into a stereo pass → native
+   Submit crash (the "random" chapter-transition crash after the grace gate
+   shipped — a race, which is why some transitions survived). No same-mode
+   cache → skip (black frame until the provider recovers, typically 1-5
+   frames).
 3. **Chapter transitions** (camera churn while loading) — crashed at the frame
    the next chapter's `cam_MainCamera` appeared. CRITICAL FINDING (2026-07-21):
    `camera_Loading` is absent from SetupFrame's camera array EVERY OTHER FRAME

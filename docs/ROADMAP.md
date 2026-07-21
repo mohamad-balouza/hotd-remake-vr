@@ -4,13 +4,20 @@ Status after the initial sessions (2026-07-21): Chapter 1 fully playable in VR �
 stereo, 6DOF, motion-controller aiming, all buttons, menus navigable, comfort
 patches in. Repo builds + auto-deploys; docs in place.
 
-## 1. Stability — chapter transitions (VERIFIED 2026-07-21)
+## 1. Stability — chapter transitions
 
-- **User playthrough chapter 1 → 2: no crash.** Root cause of the original
-  native Submit crash: the presence-only gate resumed XR every other frame
-  during loads (`camera_Loading` A/B set alternation) — see DEVNOTES. Fix:
-  grace-gate (`Stability.LoadingGraceSeconds`, 1.5s realtime tail) + resume
-  diagnostics (enriched `[VRGate]` lines + 120-frame un-throttled window).
+- Root cause #1 of the original native Submit crash: the presence-only gate
+  resumed XR every other frame during loads (`camera_Loading` A/B set
+  alternation) — see DEVNOTES. Fix: grace-gate
+  (`Stability.LoadingGraceSeconds`, 1.5s realtime tail) + resume diagnostics
+  (enriched `[VRGate]` lines + 120-frame un-throttled window).
+- Root cause #2, found+fixed 2026-07-21 after a round-5 transition crash:
+  the cull repair substituted FLAT loading-screen culling params into the
+  first stereo pass at resume whenever the provider NaN'd on that exact
+  frame — a race, which is why some transitions survived and one didn't.
+  Repair is now mode-aware (XR passes repair only from XR cache entries,
+  else safe skip) — see DEVNOTES crash class 2. **Verify**: user replays a
+  chapter 1 → 2 transition (ideally a couple of times).
 - Prompt phase: the PromptPhaseXR experiment CRASHED on a real chapter load
   (co-render frames — see DEVNOTES) and is now default-off + hardened.
   Loads instead fade the SteamVR compositor grid in
