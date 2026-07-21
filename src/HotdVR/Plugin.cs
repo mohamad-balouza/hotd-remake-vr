@@ -33,9 +33,14 @@ namespace HotdVR
                 return;
             }
 
+            // The game pauses when its window loses focus; in VR the desktop
+            // window is frequently unfocused while playing, so keep running.
+            Application.runInBackground = true;
+
             var runner = new GameObject("HotdVR");
             DontDestroyOnLoad(runner);
             runner.AddComponent<VRDiagnostics>();
+            runner.AddComponent<VRSystems>();
         }
     }
 

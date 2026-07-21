@@ -17,6 +17,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Unity.XR.Management\Unity.XR.Management.csproj" />
+    <ProjectReference Include="..\Unity.XR.OpenVR\Unity.XR.OpenVR.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="BepInEx">
       <HintPath>$(BepInExCore)\BepInEx.dll</HintPath>
       <Private>false</Private>
@@ -93,7 +98,10 @@
 
   <Target Name="DeployToGame" AfterTargets="Build" Condition="Exists('$(GamePath)\BepInEx')">
     <MakeDir Directories="$(GamePath)\BepInEx\plugins\HotdVR" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GamePath)\BepInEx\plugins\HotdVR" />
+    <ItemGroup>
+      <DeployDlls Include="$(TargetDir)HotdVR.dll;$(TargetDir)Unity.XR.OpenVR.dll;$(TargetDir)Unity.XR.Management.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DeployDlls)" DestinationFolder="$(GamePath)\BepInEx\plugins\HotdVR" />
   </Target>
 
 </Project>

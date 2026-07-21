@@ -45,13 +45,13 @@ Write-Host "[ok] Native XR provider + subsystem manifest placed."
 # InitializationType 1  = Scene (full VR app, not overlay)
 # MirrorView 2          = Right eye on the desktop window (mode 3 has a known
 #                         black-window bug in the Valve plugin)
+# IMPORTANT: keys with EMPTY values (e.g. "ActionManifestFileRelativeFilePath:")
+# hang the native parser in XRSDKOpenVR.dll - only write keys that have values.
 $steamVrDir = Join-Path $dataDir "StreamingAssets\SteamVR"
 New-Item -ItemType Directory -Force $steamVrDir | Out-Null
 @"
 StereoRenderingMode: 0
 InitializationType: 1
-EditorAppKey: application.generated.unity.thehouseofthedeadremake.exe
-ActionManifestFileRelativeFilePath:
 MirrorView: 2
 "@ | Set-Content -Path (Join-Path $steamVrDir "OpenVRSettings.asset") -Encoding ascii
 Write-Host "[ok] OpenVRSettings.asset written (multipass, scene, mirror=right)."
