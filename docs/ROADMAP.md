@@ -11,9 +11,14 @@ patches in. Repo builds + auto-deploys; docs in place.
   during loads (`camera_Loading` A/B set alternation) — see DEVNOTES. Fix:
   grace-gate (`Stability.LoadingGraceSeconds`, 1.5s realtime tail) + resume
   diagnostics (enriched `[VRGate]` lines + 120-frame un-throttled window).
-- Prompt phase (`Stability.PromptPhaseXR`): "Shoot to start" lives inside
-  the loading state; XR resumes mid-load on a 180-frame-stable main camera.
-  Shipped, verified headless; user round 2 confirms visually.
+- Prompt phase: the PromptPhaseXR experiment CRASHED on a real chapter load
+  (co-render frames — see DEVNOTES) and is now default-off + hardened.
+  Loads instead fade the SteamVR compositor grid in
+  (`Stability.LoadingGridFade`) so the headset shows the void, not black.
+  Headless-verified end-to-end 2026-07-21: new game → chapter 1 load →
+  Shoot-to-start prompt → shot fired → grace resume → gameplay, no crash.
+  Future idea for visible loading screens: OpenVR overlay quad showing the
+  loading texture (compositor-side, no game rendering).
 - If a transition crash ever resurfaces: bump grace, suspend during
   `HD_Cutscene` starts (needs decompile — no reference in src yet), or
   validate the XR pass renderTarget pre-submit (promote `ExecutePre` to a

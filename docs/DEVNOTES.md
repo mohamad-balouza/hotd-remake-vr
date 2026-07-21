@@ -84,13 +84,21 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
    on every reappearance). **VERIFIED 2026-07-21: user played chapter 1 → 2,
    no crash; both loads show clean suspend → grace → resume onto the new
    chapter camera with renderHealth skipped=0.**
-   Prompt phase: loading phases contain interactive prompts ("Shoot to
-   start") — camera_Loading flaps for the whole ~30s wait. Proper suspension
-   made those a black headset, so `PromptResumed` (gate state 4,
-   `Stability.PromptPhaseXR`) resumes XR mid-load once Camera.main has kept
-   one identity 180 consecutive frames; any camera change re-suspends, and
-   the load end is debounced by the loading camera staying gone for the
-   grace duration (no suspension blink into gameplay).
+   Prompt phase (CRASHED, now default-off): loading phases contain
+   interactive prompts ("Shoot to start") — camera_Loading flaps for the
+   whole ~30s wait, so proper suspension shows a black headset there. The
+   `PromptResumed` experiment (resume XR mid-load on a 180-frame-stable
+   Camera.main) CRASHED on a real chapter load: chapter prompts co-render
+   cam_MainCamera WITH camera_Loading every visible frame, and enabling
+   xrRendering on such a frame produced a partial XR layout (Execute for
+   multipassId=1 with no multipassId=0) and a native Submit crash — the
+   diag window caught the exact frame. `Stability.PromptPhaseXR` is now
+   default FALSE and hardened (activation additionally needs camera_Loading
+   gone 20+ consecutive frames — chapter prompts never satisfy this).
+   Instead, suspension fades the SteamVR compositor grid in/out
+   (`Stability.LoadingGridFade`, `OpenVR.Compositor.FadeGrid`) so loads
+   show the tracked void, not frozen black. RULE OF THUMB: never enable
+   xrRendering on a camera in a frame set that contains camera_Loading.
 - SteamVR **null driver** (re-tested 2026-07-21): culling params come out
   mostly FINITE (second eye repaired from the first) — XR passes actually
   render and submit headless, so the null driver now exercises the real
