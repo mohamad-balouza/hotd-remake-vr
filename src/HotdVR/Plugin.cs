@@ -64,6 +64,7 @@ namespace HotdVR
         public readonly ConfigEntry<bool> LeftHanded;
         public readonly ConfigEntry<bool> ShowLaser;
         public readonly ConfigEntry<float> AimPitchOffset;
+        public readonly ConfigEntry<float> LoadingGraceSeconds;
         public readonly ConfigEntry<float> RenderScale;
         public readonly ConfigEntry<bool> DisableSSR;
         public readonly ConfigEntry<bool> DisableVolumetrics;
@@ -84,6 +85,11 @@ namespace HotdVR
                 "Show the laser pointer and 3D reticle from the aim hand.");
             AimPitchOffset = config.Bind("Controls", "AimPitchOffset", 45f,
                 "Downward tilt (degrees) of the aim ray relative to the controller, approximating a pistol barrel. 0 = controller forward.");
+            LoadingGraceSeconds = config.Bind("Stability", "LoadingGraceSeconds", 1.5f,
+                "Seconds to keep XR passes suspended after a loading screen disappears, letting the new "
+                + "chapter's cameras settle before stereo submission restarts (guards the native Submit "
+                + "crash on chapter transitions). The headset stays on the loading view slightly longer "
+                + "than the flat window does. 0 = resume immediately (old behavior). Clamped to 0-10.");
             RenderScale = config.Bind("Performance", "RenderScale", 1.0f,
                 "Eye render target scale (0.5-1.5). Lower = sharper performance, softer image. Applied at VR start.");
             DisableSSR = config.Bind("Performance", "DisableSSR", true,
