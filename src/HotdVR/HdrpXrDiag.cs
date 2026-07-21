@@ -55,42 +55,67 @@ namespace HotdVR
             return true;
         }
 
-        internal static int skippedFrames, renderedFrames;
+        internal static int skippedFrames, renderedFrames, repairedFrames;
         private static bool loggedMatrixDetail;
+        private static float lastRepairLog;
+        private static readonly Dictionary<int, CachedCulling> lastValidCulling = new Dictionary<int, CachedCulling>();
 
-        // Defensive: during scene loads the XR provider can hand back degenerate
-        // culling data (observed: frustum warnings from GetCullingParameters
-        // followed by a native crash in ScriptableRenderContext.Submit). Skip
-        // rendering the camera for that frame instead of submitting garbage.
-        // Note: SteamVR's null driver produces degenerate matrices permanently,
-        // so under it every XR camera render is skipped (black HMD by design).
-        private static bool TryCullValidatePre(UnityEngine.Rendering.ScriptableCullingParameters cullingParams, ref bool __result)
+        private struct CachedCulling
+        {
+            public int frame;
+            public UnityEngine.Rendering.ScriptableCullingParameters cullingParams;
+        }
+
+        // The OpenVR XR provider returns NaN culling matrices for the second
+        // multipass eye (and for all passes during scene-load hitches). Feeding
+        // them to the native renderer crashes in ScriptableRenderContext.Submit.
+        // Repair: substitute the last valid culling params seen for the same
+        // camera this/last few frames (in practice the left eye's - the culling
+        // frustums differ only by the eye offset). If nothing recent is cached,
+        // skip the camera render for that frame.
+        private static bool TryCullValidatePre(Camera camera, ref UnityEngine.Rendering.ScriptableCullingParameters cullingParams, ref bool __result)
         {
             var cull = cullingParams.cullingMatrix;
             var stereoView = cullingParams.stereoViewMatrix;
             var stereoProj = cullingParams.stereoProjectionMatrix;
             bool valid = IsFinite(cull) && IsFinite(stereoView) && IsFinite(stereoProj)
                          && Mathf.Abs(cull.determinant) > 1e-12f;
-            if (!valid)
+            int camId = camera.GetInstanceID();
+
+            if (valid)
             {
-                skippedFrames++;
-                if (Time.realtimeSinceStartup - lastInvalidLog > 5f)
-                {
-                    lastInvalidLog = Time.realtimeSinceStartup;
-                    Plugin.Log.LogWarning($"[HdrpDiag] DEGENERATE culling params - skipping render (skipped={skippedFrames} rendered={renderedFrames})");
-                    if (!loggedMatrixDetail)
-                    {
-                        loggedMatrixDetail = true;
-                        Plugin.Log.LogWarning($"[HdrpDiag] cullingMatrix det={cull.determinant} finite={IsFinite(cull)}\n{cull}");
-                        Plugin.Log.LogWarning($"[HdrpDiag] stereoView finite={IsFinite(stereoView)}\n{stereoView}");
-                        Plugin.Log.LogWarning($"[HdrpDiag] stereoProj finite={IsFinite(stereoProj)}\n{stereoProj}");
-                    }
-                }
-                __result = false;
-                return false; // skip original TryCull
+                lastValidCulling[camId] = new CachedCulling { frame = Time.frameCount, cullingParams = cullingParams };
+                renderedFrames++;
+                return true;
             }
-            renderedFrames++;
-            return true;
+
+            if (lastValidCulling.TryGetValue(camId, out var cached) && Time.frameCount - cached.frame <= 5)
+            {
+                cullingParams = cached.cullingParams;
+                repairedFrames++;
+                if (Time.realtimeSinceStartup - lastRepairLog > 10f)
+                {
+                    lastRepairLog = Time.realtimeSinceStartup;
+                    Plugin.Log.LogInfo($"[HdrpDiag] repaired degenerate culling with cached params (repaired={repairedFrames} rendered={renderedFrames} skipped={skippedFrames})");
+                }
+                return true;
+            }
+
+            skippedFrames++;
+            if (Time.realtimeSinceStartup - lastInvalidLog > 5f)
+            {
+                lastInvalidLog = Time.realtimeSinceStartup;
+                Plugin.Log.LogWarning($"[HdrpDiag] DEGENERATE culling params, no recent cache - skipping render (skipped={skippedFrames} rendered={renderedFrames} repaired={repairedFrames})");
+                if (!loggedMatrixDetail)
+                {
+                    loggedMatrixDetail = true;
+                    Plugin.Log.LogWarning($"[HdrpDiag] cullingMatrix det={cull.determinant} finite={IsFinite(cull)}\n{cull}");
+                    Plugin.Log.LogWarning($"[HdrpDiag] stereoView finite={IsFinite(stereoView)}\n{stereoView}");
+                    Plugin.Log.LogWarning($"[HdrpDiag] stereoProj finite={IsFinite(stereoProj)}\n{stereoProj}");
+                }
+            }
+            __result = false;
+            return false; // skip original TryCull
         }
 
         private static void TryCalcPost(Camera camera, object xrPass, bool __result)
