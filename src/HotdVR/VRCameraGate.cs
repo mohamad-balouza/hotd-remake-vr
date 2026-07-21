@@ -51,6 +51,7 @@ namespace HotdVR
         private static int stableMainFrames;
         private static int loadingAbsentStreak; // consecutive Enforce frames without camera_Loading
         private static float promptLoadingLastSeen;
+        private static bool promptReadySignaled;  // per load episode
         private static bool gridFadedIn;
 
         public static Camera CurrentVRCamera { get; private set; }
@@ -100,6 +101,7 @@ namespace HotdVR
                         state = GateState.Suspended;
                         graceStartLogged = false;
                         graceReentryLogged = false;
+                        promptReadySignaled = false;
                         transitioned = true;
                         LastStateChangeFrame = Time.frameCount;
                         Plugin.Log.LogInfo($"[VRGate] loading screen started - XR passes suspended (frame {Time.frameCount}, {RenderHealth()})");
@@ -191,17 +193,28 @@ namespace HotdVR
                     stableMainId = id;
                     stableMainFrames = id != 0 ? 1 : 0;
                 }
-                // Hard safety: never enable XR while camera_Loading could still
-                // co-render with the main camera - that exact frame produced a
-                // partial XR layout and a native Submit crash on chapter loads.
-                if (Plugin.Cfg.PromptPhaseXR.Value && stableMainFrames >= PromptStableFrames
-                    && loadingAbsentStreak >= PromptLoadingAbsentFrames)
+                if (stableMainFrames >= PromptStableFrames)
                 {
-                    state = GateState.PromptResumed;
-                    promptLoadingLastSeen = Time.realtimeSinceStartup;
-                    transitioned = true;
-                    LastStateChangeFrame = Time.frameCount;
-                    Plugin.Log.LogInfo($"[VRGate] main camera '{CamName(m)}' stable {PromptStableFrames} frames and loading camera gone {PromptLoadingAbsentFrames} frames - XR resumed for prompt phase (frame {Time.frameCount}, {RenderHealth()})");
+                    // Hard safety: never enable XR while camera_Loading could
+                    // still co-render with the main camera - that exact frame
+                    // produced a partial XR layout and a native Submit crash.
+                    if (Plugin.Cfg.PromptPhaseXR.Value && loadingAbsentStreak >= PromptLoadingAbsentFrames)
+                    {
+                        state = GateState.PromptResumed;
+                        promptLoadingLastSeen = Time.realtimeSinceStartup;
+                        transitioned = true;
+                        LastStateChangeFrame = Time.frameCount;
+                        Plugin.Log.LogInfo($"[VRGate] main camera '{CamName(m)}' stable {PromptStableFrames} frames and loading camera gone {PromptLoadingAbsentFrames} frames - XR resumed for prompt phase (frame {Time.frameCount}, {RenderHealth()})");
+                    }
+                    else if (!promptReadySignaled)
+                    {
+                        // Chapter loaded behind the loading screen - a proxy
+                        // for the shoot-to-start prompt being up. Swap the
+                        // suspension overlay to the pull-the-trigger card.
+                        promptReadySignaled = true;
+                        VRLoadingOverlay.SetReady(true);
+                        Plugin.Log.LogInfo($"[VRGate] load looks ready (main camera stable {PromptStableFrames} frames) - overlay switched to trigger card (frame {Time.frameCount})");
+                    }
                 }
             }
             else if (state == GateState.Rendering)

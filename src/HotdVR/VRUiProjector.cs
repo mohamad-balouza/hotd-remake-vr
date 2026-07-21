@@ -48,16 +48,37 @@ namespace HotdVR
 
             foreach (var canvas in FindObjectsOfType<Canvas>())
             {
-                // The 2D crosshair is replaced by the 3D laser/reticle: keep its
-                // canvas out of the headset entirely (and its pixel math intact).
-                if (canvas.GetComponentInChildren<HD_Crosshair>(true) != null)
+                // The 2D crosshair is replaced by the 3D laser/reticle.
+                // Dedicated crosshair canvases (named so) are hidden wholesale.
+                // MIXED canvases (Generic_IngameUI carries health/score UI plus
+                // an HD_Crosshair child) must keep rendering - hiding the whole
+                // canvas nuked the in-game HUD (round-3 bug). For those, only
+                // the crosshair subtrees are faded out via CanvasGroup, which
+                // keeps their objects active and the game's pixel math intact.
+                var crosshairs = canvas.GetComponentsInChildren<HD_Crosshair>(true);
+                if (crosshairs.Length > 0)
                 {
-                    if (canvas.enabled)
+                    if (canvas.name.IndexOf("crosshair", System.StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        canvas.enabled = false;
-                        Plugin.Log.LogInfo($"[VRUi] crosshair canvas '{canvas.name}' hidden in VR");
+                        if (canvas.enabled)
+                        {
+                            canvas.enabled = false;
+                            Plugin.Log.LogInfo($"[VRUi] crosshair canvas '{canvas.name}' hidden in VR");
+                        }
+                        continue;
                     }
-                    continue;
+                    foreach (var ch in crosshairs)
+                    {
+                        var cg = ch.GetComponent<CanvasGroup>();
+                        if (cg == null)
+                        {
+                            cg = ch.gameObject.AddComponent<CanvasGroup>();
+                            Plugin.Log.LogInfo($"[VRUi] crosshair subtree '{ch.name}' faded out in '{canvas.name}'");
+                        }
+                        if (cg.alpha != 0f)
+                            cg.alpha = 0f;
+                    }
+                    // fall through: the canvas itself converts normally
                 }
 
                 if (worldMode && IsHudCanvas(canvas.name))

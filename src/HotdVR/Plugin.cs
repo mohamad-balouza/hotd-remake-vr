@@ -77,6 +77,7 @@ namespace HotdVR
         public readonly ConfigEntry<bool> ShowLaser;
         public readonly ConfigEntry<bool> ShowGunModel;
         public readonly ConfigEntry<float> GunModelZOffset;
+        public readonly ConfigEntry<bool> ShowAmmoReadout;
         public readonly ConfigEntry<float> AimPitchOffset;
         public readonly ConfigEntry<float> LoadingGraceSeconds;
         public readonly ConfigEntry<bool> PromptPhaseXR;
@@ -126,6 +127,10 @@ namespace HotdVR
                 "Forward/back offset (meters) of the gun model along the barrel axis. Adjust in-game: "
                 + "hold the off-hand stick click and push the stick left (pull back) / right (push "
                 + "forward), or press Home/End. Range -0.2 to 0.2.");
+            ShowAmmoReadout = config.Bind("Controls", "ShowAmmoReadout", true,
+                "Ammo and health pips floating above the gun model (the game's own bullet counter is an "
+                + "overlay camera that cannot reach the headset). White pips = rounds left (yellow while "
+                + "reloading, red when empty), orange pips = health.");
             AimPitchOffset = config.Bind("Controls", "AimPitchOffset", 45f,
                 "Downward tilt (degrees) of the aim ray relative to the controller, approximating a pistol barrel. 0 = controller forward.");
             LoadingGraceSeconds = config.Bind("Stability", "LoadingGraceSeconds", 1.5f,
