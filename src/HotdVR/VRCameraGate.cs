@@ -18,14 +18,29 @@ namespace HotdVR
 
         public static Camera CurrentVRCamera { get; private set; }
 
+        /// <summary>True while a load screen camera is active - XR passes are
+        /// fully suspended then (chapter transitions crash natively in Submit
+        /// when XR rendering runs across the camera churn of a scene load).</summary>
+        public static bool LoadingScreenActive { get; private set; }
+
         public static void Enforce(Camera[] cameras)
         {
             if (!VRRuntimeBootstrap.Active)
                 return;
 
+            bool loading = false;
+            foreach (var cam in cameras)
+                if (cam != null && cam.name == "camera_Loading")
+                    loading = true;
+            if (loading != LoadingScreenActive)
+            {
+                LoadingScreenActive = loading;
+                Plugin.Log.LogInfo($"[VRGate] loading screen {(loading ? "started - XR passes suspended" : "ended - XR passes resumed")}");
+            }
+
             // The gameplay/menu main camera is tagged MainCamera in this game
             // (menu 'Main Camera', chapters 'cam_MainCamera').
-            Camera main = Camera.main;
+            Camera main = LoadingScreenActive ? null : Camera.main;
             CurrentVRCamera = main;
 
             foreach (var cam in cameras)
