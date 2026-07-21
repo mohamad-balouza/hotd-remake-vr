@@ -30,6 +30,8 @@ namespace HotdVR
                 postfix: new HarmonyMethod(typeof(VRInputPatches), nameof(GetButtonUpPostfix)));
             harmony.Patch(AccessTools.Method(player, "GetNegativeButtonDown", new[] { typeof(int) }),
                 postfix: new HarmonyMethod(typeof(VRInputPatches), nameof(GetNegativeButtonDownPostfix)));
+            harmony.Patch(AccessTools.Method(player, "GetNegativeButton", new[] { typeof(int) }),
+                postfix: new HarmonyMethod(typeof(VRInputPatches), nameof(GetNegativeButtonPostfix)));
             harmony.Patch(AccessTools.Method(player, "GetAxis", new[] { typeof(int) }),
                 postfix: new HarmonyMethod(typeof(VRInputPatches), nameof(GetAxisPostfix)));
             Plugin.Log.LogInfo("[VRInput] Rewired bridge patches applied");
@@ -37,6 +39,13 @@ namespace HotdVR
 
         private static bool IsGameplayTarget(Rewired.Player p) => p.id == 0;
         private static bool IsMenuTarget(Rewired.Player p) => p.id == 0 || p.id == SystemPlayerId;
+
+        // Menu navigation goes through Rewired's uGUI input module, whose move
+        // gate (GetRawMoveVector) requires GetAxis(5/6) AND the HELD digital
+        // states with matching sign: GetButton(int) for positive deflection,
+        // GetNegativeButton(int) for negative (decompiled 2026-07-21). The
+        // module self-repeats at ~10 steps/s while held.
+        private const float NavHold = 0.5f;
 
         private static void GetButtonDownPostfix(Rewired.Player __instance, int actionId, ref bool __result)
         {
@@ -78,6 +87,16 @@ namespace HotdVR
             }
         }
 
+        private static void GetNegativeButtonPostfix(Rewired.Player __instance, int actionId, ref bool __result)
+        {
+            if (__result || !VRRuntimeBootstrap.Active || !IsMenuTarget(__instance)) return;
+            switch (actionId)
+            {
+                case 5: __result |= VRControllers.LeftStick.x < -NavHold; return;
+                case 6: __result |= VRControllers.LeftStick.y < -NavHold; return;
+            }
+        }
+
         private static void GetButtonPostfix(Rewired.Player __instance, int actionId, ref bool __result)
         {
             if (__result || !VRRuntimeBootstrap.Active) return;
@@ -89,8 +108,15 @@ namespace HotdVR
                     case 2: __result |= VRControllers.GripHeld; return;
                 }
             }
-            if (IsMenuTarget(__instance) && actionId == 11)
-                __result |= VRControllers.AHeld;                              // Skip (hold)
+            if (IsMenuTarget(__instance))
+            {
+                switch (actionId)
+                {
+                    case 11: __result |= VRControllers.AHeld; return;         // Skip (hold)
+                    case 5: __result |= VRControllers.LeftStick.x > NavHold; return; // NavX held +
+                    case 6: __result |= VRControllers.LeftStick.y > NavHold; return; // NavY held +
+                }
+            }
         }
 
         private static void GetButtonUpPostfix(Rewired.Player __instance, int actionId, ref bool __result)

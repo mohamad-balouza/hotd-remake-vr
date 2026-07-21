@@ -16,6 +16,36 @@ namespace HotdVR
     {
         private static ulong handle = OpenVR.k_ulOverlayHandleInvalid;
         private static bool createFailed;
+        private static bool ready;
+
+        private static string PngPath(bool readyCard) => Path.Combine(
+            Path.GetDirectoryName(typeof(VRLoadingOverlay).Assembly.Location) ?? "",
+            readyCard ? "loading-overlay-ready.png" : "loading-overlay.png");
+
+        /// <summary>Swaps the card between LOADING and PULL-THE-TRIGGER. Driven
+        /// by the gate's mid-load camera-stability signal - a proxy for "the
+        /// prompt is probably up", hence the retry wording on the card.</summary>
+        internal static void SetReady(bool value)
+        {
+            if (value == ready)
+                return;
+            ready = value;
+            if (handle == OpenVR.k_ulOverlayHandleInvalid)
+                return;
+            try
+            {
+                var overlay = OpenVR.Overlay;
+                if (overlay == null)
+                    return;
+                var err = overlay.SetOverlayFromFile(handle, PngPath(ready));
+                if (err != EVROverlayError.None)
+                    Plugin.Log.LogWarning($"[VRGate] loading overlay swap failed: {err}");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"[VRGate] loading overlay swap error: {e.Message}");
+            }
+        }
 
         internal static void SetVisible(bool show)
         {
@@ -32,6 +62,8 @@ namespace HotdVR
                 if (handle == OpenVR.k_ulOverlayHandleInvalid)
                     return;
 
+                if (!show)
+                    SetReady(false); // next load starts back at the LOADING card
                 var err = show ? overlay.ShowOverlay(handle) : overlay.HideOverlay(handle);
                 if (err == EVROverlayError.None)
                     Plugin.Log.LogInfo($"[VRGate] loading overlay {(show ? "shown" : "hidden")} (frame {Time.frameCount})");
@@ -55,9 +87,7 @@ namespace HotdVR
                 return;
             }
 
-            string png = Path.Combine(
-                Path.GetDirectoryName(typeof(VRLoadingOverlay).Assembly.Location) ?? "",
-                "loading-overlay.png");
+            string png = PngPath(ready);
             err = overlay.SetOverlayFromFile(handle, png);
             if (err != EVROverlayError.None)
             {

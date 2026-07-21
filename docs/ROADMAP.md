@@ -49,6 +49,16 @@ patches in. Repo builds + auto-deploys; docs in place.
   default anyway); main menu pushed to `UI.MenuDistance` 2m; gun model
   forward/back live-adjust (`Controls.GunModelZOffset`); loading overlay
   card for shoot-to-continue waits (`Stability.LoadingOverlay`).
+- FIXED after round 3 (2026-07-21, decompile-driven): menu stick-nav for
+  real this time — the Rewired uGUI input module needs the HELD
+  GetButton/GetNegativeButton(int) states alongside GetAxis (see DEVNOTES);
+  in-game HUD restored — the crosshair exclusion was hiding the whole
+  Generic_IngameUI canvas (health/score), now only the nested crosshair
+  subtrees fade; ammo/health pips above the gun (the game's bullet counter
+  is an overlay-camera prop rig that can't reach the headset); loading
+  overlay swaps to a pull-the-trigger card when the chapter has loaded
+  behind the loading screen (camera-stability signal). Round-4 headset
+  verification pending.
 - WorldFollow HUD stays EXPERIMENTAL: needs a ZTest-Always UI material pass
   (world canvases vanish into corridor geometry) before it can be default.
 - Remaining: menu interaction via laser-pointer UI clicking (uGUI raycaster

@@ -148,7 +148,21 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
   player-held weapon meshes in gameplay; armory `HD_PreviewWeapon` models are
   menu-scene-embedded, not addressable). Swaps per-weapon silhouette by
   polling `HD_Player.Player1.WeaponHolder.CurrentWeaponType` (survives scene
-  loads). `Controls.ShowGunModel`.
+  loads). `Controls.ShowGunModel`, forward/back via `GunModelZOffset`.
+- Ammo/health pip readout above the gun (`Controls.ShowAmmoReadout`): the
+  game's bullet counter is PHYSICAL 3D props (`HD_AmmoController` Rigidbody
+  bullets) on the cam_Ammo overlay camera - structurally invisible in VR.
+  Pips read `CurrentWeapon.Ammo/MagazineSize/IsReloading` and
+  `HD_Player.HealthScript.HealthCurrent` (white=rounds, yellow=reloading,
+  red=empty, orange=health). Score singleton if ever needed:
+  `HD_ScoreManager.Instance.GetPlayerTotalScore(PlayerType)`.
+- In-game 2D HUD = `Generic_IngameUI(Clone)` (`HD_GenericPlayerUI :
+  MP_HUDManager`): health torches, score, notifications. Its crosshairs are
+  nested children (`prefab_Crosshair_Player1/2`, each an `HD_Crosshair` with
+  its own canvas) - hide ONLY those subtrees (CanvasGroup alpha 0, objects
+  stay active for the pixel math); disabling the whole canvas kills the HUD
+  (the round-3 invisible-HUD bug). Dedicated `canvas_Crosshairs` canvases
+  are still hidden wholesale by name.
 - Aim ray = controller pose with `AimPitchOffset` (user-tuned, ~45°+) pitched
   down. Live adjust: off-hand stick click held + stick up/down, auto-saved to
   config on release.
@@ -166,9 +180,19 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
 - `MP_CursorSetterModule.changeCursorVisibility` prefix → cursor never visible
   in VR.
 - Input bridge: postfixes on `Rewired.Player.GetButtonDown/GetButton/
-  GetButtonUp/GetNegativeButtonDown(int)` + `GetAxis(int)`; gameplay actions
-  gated to player id 0, menu actions to id 0 + System. All confirmed working
-  in-game.
+  GetButtonUp/GetNegativeButtonDown/GetNegativeButton(int)` + `GetAxis(int)`;
+  gameplay actions gated to player id 0, menu actions to id 0 + System.
+- MENU NAV MECHANICS (decompiled 2026-07-21): menus run on Rewired's
+  `RewiredStandaloneInputModule` (Assembly-CSharp-firstpass). Its move gate
+  is a compound AND: `GetAxis(5/6)` non-zero of the right sign AND the HELD
+  digital state - `GetButton(int)` for positive, `GetNegativeButton(int)`
+  for negative (default `moveOneElementPerAxisPress=false` branch; module
+  self-repeats ~10/s). Submit/Cancel are plain `GetButtonDown(9/10)`, which
+  is why Accept worked while nav didn't until the held variants were
+  bridged. CAVEAT: `MP_MenuNavigationManager` back-navigation registers a
+  Rewired `AddInputEventDelegate` (ButtonJustReleased, Cancel) - event
+  delegates fire from real device state and CANNOT be reached by Harmony
+  postfixes on the polling API; uGUI cancelHandler still works from VR B.
 - Comfort: `HD_PlayerCamera` Shake/ApplyHitRecoil/Zoom/StartCameraShake/
   StartCameraZoom no-op'd while VR active.
 - UI: `VRUiProjector` converts ScreenSpaceOverlay canvases → ScreenSpaceCamera
