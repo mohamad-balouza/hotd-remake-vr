@@ -42,6 +42,7 @@ namespace HotdVR
             ComfortPatches.Apply(harmony);
             VRAimPatches.Apply(harmony);
             VRInputPatches.Apply(harmony);
+            PerfPatches.Apply(harmony);
 
             var runner = new GameObject("HotdVR");
             DontDestroyOnLoad(runner);
@@ -64,6 +65,10 @@ namespace HotdVR
         public readonly ConfigEntry<bool> ShowLaser;
         public readonly ConfigEntry<float> AimPitchOffset;
         public readonly ConfigEntry<float> RenderScale;
+        public readonly ConfigEntry<bool> DisableSSR;
+        public readonly ConfigEntry<bool> DisableVolumetrics;
+        public readonly ConfigEntry<bool> DisableContactShadows;
+        public readonly ConfigEntry<bool> DisableSSAO;
 
         public VRConfig(ConfigFile config)
         {
@@ -77,10 +82,18 @@ namespace HotdVR
                 "Aim with the left controller instead of the right.");
             ShowLaser = config.Bind("Controls", "ShowLaser", true,
                 "Show the laser pointer and 3D reticle from the aim hand.");
-            AimPitchOffset = config.Bind("Controls", "AimPitchOffset", 30f,
+            AimPitchOffset = config.Bind("Controls", "AimPitchOffset", 45f,
                 "Downward tilt (degrees) of the aim ray relative to the controller, approximating a pistol barrel. 0 = controller forward.");
             RenderScale = config.Bind("Performance", "RenderScale", 1.0f,
                 "Eye render target scale (0.5-1.5). Lower = sharper performance, softer image. Applied at VR start.");
+            DisableSSR = config.Bind("Performance", "DisableSSR", true,
+                "Disable screen-space reflections in VR (large GPU win, minor visual difference).");
+            DisableVolumetrics = config.Bind("Performance", "DisableVolumetrics", false,
+                "Disable volumetric fog/lighting in VR (large GPU win, but loses atmosphere).");
+            DisableContactShadows = config.Bind("Performance", "DisableContactShadows", true,
+                "Disable contact shadows in VR (moderate GPU win).");
+            DisableSSAO = config.Bind("Performance", "DisableSSAO", false,
+                "Disable screen-space ambient occlusion in VR (moderate GPU win, flattens lighting).");
             VerboseLogging = config.Bind("Debug", "VerboseLogging", true,
                 "Extra diagnostic logging (subsystem dumps, per-scene camera info).");
         }
