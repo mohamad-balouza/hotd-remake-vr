@@ -27,6 +27,25 @@ User verdict: everything working; remaining polish parked below by choice.
    - Needs: readable at gun depth (or small ZTest-Always UI material), fed
      from `Ammo/MagazineSize/IsReloading` + `HealthScript.HealthCurrent`
      (+ score via `HD_ScoreManager.Instance.GetPlayerTotalScore`).
+3. **Sound missing in VR** (user report 2026-07-21: no shooting/dialog/zombie
+   audio; predates the recent changes — likely present since VR bring-up):
+   - Prime suspect: the game uses FMOD, which binds its output device at
+     startup and does NOT follow Windows default-device changes — Virtual
+     Desktop swaps the default audio device when streaming starts, so game
+     audio likely plays to the desktop device (or a dead endpoint) instead
+     of the headset stream.
+   - Characterize first: with the headset on, is ALL audio silent or only
+     some buses (music vs SFX/dialog)? Is the audio audible on the desktop
+     speakers meanwhile? Does audio work in flat mode on the same boot?
+   - Fix path: from the mod, use `FMODUnity.RuntimeManager.CoreSystem` →
+     `getNumDrivers/getDriverInfo/getDriver` (log the device list), then
+     `setDriver` to the current Windows default (or a config-chosen index);
+     optionally handle `SYSTEM_CALLBACK_TYPE.DEVICELISTCHANGED` to re-bind
+     when VD's virtual device appears. Config: `Audio.OutputDevice` (auto /
+     index). Headless-verifiable: driver list + selection in the log.
+   - Also rule out: SteamVR's "change audio device on session start"
+     setting, VD audio passthrough settings, and the game's own volume
+     settings in the save.
 
 ## 1. Stability — chapter transitions
 
