@@ -94,19 +94,19 @@ namespace HotdVR
             {
                 cullingParams = cached.cullingParams;
                 repairedFrames++;
-                if (Time.realtimeSinceStartup - lastRepairLog > 10f)
+                if (Time.realtimeSinceStartup - lastRepairLog > 10f || VRCameraGate.InDiagWindow)
                 {
                     lastRepairLog = Time.realtimeSinceStartup;
-                    Plugin.Log.LogInfo($"[HdrpDiag] repaired degenerate culling with cached params (repaired={repairedFrames} rendered={renderedFrames} skipped={skippedFrames})");
+                    Plugin.Log.LogInfo($"[HdrpDiag] repaired degenerate culling with cached params f={Time.frameCount} cam='{camera.name}' (repaired={repairedFrames} rendered={renderedFrames} skipped={skippedFrames})");
                 }
                 return true;
             }
 
             skippedFrames++;
-            if (Time.realtimeSinceStartup - lastInvalidLog > 5f)
+            if (Time.realtimeSinceStartup - lastInvalidLog > 5f || VRCameraGate.InDiagWindow)
             {
                 lastInvalidLog = Time.realtimeSinceStartup;
-                Plugin.Log.LogWarning($"[HdrpDiag] DEGENERATE culling params, no recent cache - skipping render (skipped={skippedFrames} rendered={renderedFrames} repaired={repairedFrames})");
+                Plugin.Log.LogWarning($"[HdrpDiag] DEGENERATE culling params, no recent cache - skipping render f={Time.frameCount} cam='{camera.name}' (skipped={skippedFrames} rendered={renderedFrames} repaired={repairedFrames})");
                 if (!loggedMatrixDetail)
                 {
                     loggedMatrixDetail = true;
@@ -138,7 +138,10 @@ namespace HotdVR
         private static void ExecutePre(object renderRequest)
         {
             execCount++;
-            if (execCount % 300 >= 3 && execCount > 10) return;
+            // Un-throttled inside the gate's diagnostic window: the resume
+            // frames after a load are where the transition crash lived, and
+            // this line (camera/pass/target) is what attributes it.
+            if (execCount % 300 >= 3 && execCount > 10 && !VRCameraGate.InDiagWindow) return;
             var tr = Traverse.Create(renderRequest);
             var hdCam = tr.Field("hdCamera");
             string camName = hdCam.Property("camera").GetValue<Camera>()?.name ?? "?";
@@ -147,7 +150,7 @@ namespace HotdVR
             int multipassId = xrEnabled ? xr.Property("multipassId").GetValue<int>() : -1;
             var target = tr.Field("target");
             var targetId = target.Field("id").GetValue();
-            Plugin.Log.LogInfo($"[HdrpDiag] Execute #{execCount} cam='{camName}' xrEnabled={xrEnabled} multipassId={multipassId} targetId={targetId}");
+            Plugin.Log.LogInfo($"[HdrpDiag] Execute #{execCount} f={Time.frameCount} cam='{camName}' xrEnabled={xrEnabled} multipassId={multipassId} targetId={targetId}");
         }
 
         private static void RefreshPost(bool __result)
@@ -173,12 +176,17 @@ namespace HotdVR
             names.Sort();
             string set = string.Join("|", names);
             if (set != lastCameraSet && set != prevCameraSet)
-                Plugin.Log.LogInfo($"[HdrpDiag] camera set changed (frame {setupCount}): [{set}]");
+                Plugin.Log.LogInfo($"[HdrpDiag] camera set changed (frame {setupCount}, f={Time.frameCount}): [{set}]");
             if (set != lastCameraSet)
             {
                 prevCameraSet = lastCameraSet;
                 lastCameraSet = set;
             }
+
+            // Per-frame camera-set timeline across gate transitions, even when
+            // the A/B flap suppression above hides the set-change lines.
+            if (VRCameraGate.InDiagWindow && Plugin.Cfg.VerboseLogging.Value)
+                Plugin.Log.LogInfo($"[HdrpDiag] f={Time.frameCount} setup cams=[{set}] suspended={VRCameraGate.LoadingScreenActive} vrCam='{(VRCameraGate.CurrentVRCamera != null ? VRCameraGate.CurrentVRCamera.name : "<none>")}'");
 
             if (setupCount != 1 && setupCount % 300 != 0)
                 return;
