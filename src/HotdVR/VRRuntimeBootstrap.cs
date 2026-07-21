@@ -75,10 +75,35 @@ namespace HotdVR
                     return false;
                 }
 
+                // HDRP's XRSystemInit only applies sRGB to displays that exist at
+                // boot; ours starts later, so set it before starting subsystems.
+                var disp = Loader.GetLoadedSubsystem<UnityEngine.XR.XRDisplaySubsystem>();
+                if (disp != null)
+                    disp.sRGB = true;
+
                 Manager.StartSubsystems();
 
                 pinnedTick = OnNativeTick;
                 RegisterTickCallback(pinnedTick);
+
+                // This build ships HDRP with the (experimental in 10.x) render
+                // graph enabled, which renders black into XR passes. The classic
+                // path is intact in the assembly - switch to it while in VR.
+                if (Plugin.Cfg.DisableRenderGraph.Value)
+                {
+                    var pipeline = UnityEngine.Rendering.RenderPipelineManager.currentPipeline;
+                    var enableMethod = pipeline?.GetType().GetMethod("EnableRenderGraph",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                    if (enableMethod != null)
+                    {
+                        enableMethod.Invoke(pipeline, new object[] { false });
+                        Plugin.Log.LogInfo("[VR] HDRP render graph disabled -> classic render path");
+                    }
+                    else
+                    {
+                        Plugin.Log.LogWarning("[VR] could not find HDRenderPipeline.EnableRenderGraph");
+                    }
+                }
 
                 Active = true;
                 var display = Loader.displaySubsystem;

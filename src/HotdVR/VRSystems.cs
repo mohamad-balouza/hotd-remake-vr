@@ -66,6 +66,29 @@ namespace HotdVR
                 $"[VR/state{index}] running={d.running} renderPasses={passes} " +
                 $"camera='{(cam != null ? cam.name : "<none>")}' stereo={(cam != null && cam.stereoEnabled)} " +
                 $"eyeTex={XRSettings.eyeTextureWidth}x{XRSettings.eyeTextureHeight} device='{XRSettings.loadedDeviceName}'");
+            DumpCameras($"state{index}");
+        }
+
+        // HDRP only creates XR passes for a camera when cameraType==Game,
+        // targetTexture==null and HDAdditionalCameraData.xrRendering==true -
+        // dump all three per camera to find why the HMD stays black.
+        internal static void DumpCameras(string tag)
+        {
+            var cams = new List<Camera>(Camera.allCameras);
+            if (Camera.main != null && !cams.Contains(Camera.main))
+                cams.Add(Camera.main);
+            Plugin.Log.LogInfo($"[Cam/{tag}] allCamerasCount={Camera.allCamerasCount} dumping {cams.Count}");
+            foreach (var cam in cams)
+            {
+                string hdInfo = "no-hd-data";
+                var hd = cam.GetComponent<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData>();
+                if (hd != null)
+                    hdInfo = $"xrRendering={hd.xrRendering} passthrough={hd.fullscreenPassthrough} customRender={hd.hasCustomRender}";
+                Plugin.Log.LogInfo(
+                    $"[Cam/{tag}] '{cam.name}' type={cam.cameraType} enabled={cam.enabled} depth={cam.depth} " +
+                    $"targetTexture={(cam.targetTexture != null ? cam.targetTexture.name : "null")} " +
+                    $"targetDisplay={cam.targetDisplay} stereoEye={cam.stereoTargetEye} {hdInfo}");
+            }
         }
 
         private void OnApplicationQuit()
