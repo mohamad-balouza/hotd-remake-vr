@@ -66,9 +66,13 @@ namespace HotdVR
             // Source 2: raw OpenVR legacy controller state - works whenever the
             // runtime is up (same pipe the poses come from).
             rawAimStick = Vector2.zero;
+            rawOffStick = Vector2.zero;
+            rawOffStickClick = false;
             if (ReadRawOpenVR(leftHanded, out var raw))
             {
                 rawAimStick = raw.aimStick;
+                rawOffStick = raw.stick;
+                rawOffStickClick = raw.offStickClick;
                 trigger |= raw.trigger; grip |= raw.grip; a |= raw.a; b |= raw.b;
                 x |= raw.x; y |= raw.y; stickClick |= raw.stickClick; menu |= raw.menu;
                 if (stick.sqrMagnitude < 0.04f && raw.stick.sqrMagnitude >= 0.04f)
@@ -108,31 +112,36 @@ namespace HotdVR
             prevTrigger = trigger; prevGrip = grip; prevA = a; prevB = b; prevX = x; prevY = y;
             prevStickClick = stickClick; prevMenu = menu; prevStick = stick;
 
-            UpdatePitchAdjust(rawAimStick);
+            UpdatePitchAdjust(rawOffStick.sqrMagnitude > 0.01f ? rawOffStick : stick, rawOffStickClick);
         }
 
         private Vector2 rawAimStick;
+        private Vector2 rawOffStick;
+        private bool rawOffStickClick;
 
         private struct RawButtons
         {
             public bool trigger, grip, a, b, x, y, stickClick, menu;
+            public bool offStickClick;
             public Vector2 stick;
             public Vector2 aimStick;
         }
 
-        // Live-adjustable aim tilt: aim-hand stick up/down (or PageUp/PageDown)
-        // changes it in-game; committed to the config file on release.
+        // Live-adjustable aim tilt: off-hand stick up/down WHILE holding that
+        // stick's click (or PageUp/PageDown) changes it in-game; committed to
+        // the config file on release. The click-gate keeps it from colliding
+        // with menu navigation on the same stick.
         internal static float LivePitch = float.NaN;
         private bool pitchDirty;
 
-        private void UpdatePitchAdjust(Vector2 aimStick)
+        private void UpdatePitchAdjust(Vector2 offStick, bool offStickClicked)
         {
             if (float.IsNaN(LivePitch))
                 LivePitch = Plugin.Cfg.AimPitchOffset.Value;
 
             float delta = 0f;
-            if (Mathf.Abs(aimStick.y) > 0.7f)
-                delta = -aimStick.y * 20f * Time.unscaledDeltaTime; // stick up = aim higher = less tilt
+            if (offStickClicked && Mathf.Abs(offStick.y) > 0.5f)
+                delta = -offStick.y * 20f * Time.unscaledDeltaTime; // stick up = aim higher = less tilt
             if (Input.GetKey(KeyCode.PageDown)) delta += 20f * Time.unscaledDeltaTime;
             if (Input.GetKey(KeyCode.PageUp)) delta -= 20f * Time.unscaledDeltaTime;
 
@@ -198,6 +207,7 @@ namespace HotdVR
                 ulong pressed = state.ulButtonPressed;
                 result.x = (pressed & (1UL << (int)EVRButtonId.k_EButton_A)) != 0;
                 result.y = (pressed & (1UL << (int)EVRButtonId.k_EButton_ApplicationMenu)) != 0;
+                result.offStickClick = (pressed & (1UL << (int)EVRButtonId.k_EButton_SteamVR_Touchpad)) != 0;
                 result.stick = new Vector2(state.rAxis0.x, state.rAxis0.y);
                 any = true;
 
