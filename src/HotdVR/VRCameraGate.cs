@@ -12,17 +12,28 @@ namespace HotdVR
     /// swapchain and crashes natively in ScriptableRenderContext.Submit.
     /// Called from the XRSystem.SetupFrame prefix each frame.
     ///
-    /// Load handling is a three-state machine: Rendering -> Suspended while a
+    /// Load handling is a state machine: Rendering -> Suspended while a
     /// camera_Loading camera exists -> Grace for LoadingGraceSeconds after it
     /// disappears -> Rendering. The grace tail exists because (a) the historical
     /// transition crash hit at the frame the next chapter's cam_MainCamera
     /// appeared, right at resume, and (b) the game alternates two camera sets
     /// per frame during loads, so camera_Loading is absent every other frame
     /// mid-load - the timer only expires once the flapping has actually stopped.
+    ///
+    /// PromptResumed: long loading phases contain interactive prompts ("Shoot
+    /// to start") that would otherwise be a black headset. Once Camera.main has
+    /// kept the same identity for 180 consecutive frames mid-load, XR resumes
+    /// on it (single-camera rule still enforced) - the dangerous churn frames
+    /// are excluded by the stability requirement, and any camera change drops
+    /// straight back to Suspended. Chapter prompt phases last 1000+ frames;
+    /// the short boot-to-menu load (~150 frames of stable camera) never
+    /// qualifies, so it keeps the plain suspend->grace->resume path.
     /// </summary>
     internal static class VRCameraGate
     {
-        private enum GateState { Rendering, Suspended, Grace }
+        private enum GateState { Rendering, Suspended, Grace, PromptResumed }
+
+        private const int PromptStableFrames = 180;
 
         private static readonly HashSet<int> loggedCameras = new HashSet<int>();
         private static int lastVrCamId;
@@ -30,6 +41,9 @@ namespace HotdVR
         private static float graceUntil;
         private static bool graceStartLogged;   // per load episode
         private static bool graceReentryLogged; // per load episode
+        private static int stableMainId;        // Camera.main persistence mid-load
+        private static int stableMainFrames;
+        private static float promptLoadingLastSeen;
 
         public static Camera CurrentVRCamera { get; private set; }
 
@@ -46,8 +60,15 @@ namespace HotdVR
         /// <summary>True while XR passes are suspended: a load screen camera is
         /// active, or the post-load grace period is still running (chapter
         /// transitions crash natively in Submit when XR rendering runs across
-        /// the camera churn of a scene load).</summary>
-        public static bool LoadingScreenActive => state != GateState.Rendering;
+        /// the camera churn of a scene load). False in PromptResumed - XR is
+        /// live there.</summary>
+        public static bool LoadingScreenActive =>
+            state == GateState.Suspended || state == GateState.Grace;
+
+        /// <summary>True for the whole loading episode including the prompt
+        /// phase and grace tail - used to keep half-rate prompt frames and
+        /// load hitches out of the frame-time percentiles.</summary>
+        internal static bool InLoadingEpisode => state != GateState.Rendering;
 
         public static void Enforce(Camera[] cameras)
         {
@@ -118,6 +139,62 @@ namespace HotdVR
                         transitioned = resumed = graceResume = true;
                     }
                     break;
+
+                case GateState.PromptResumed:
+                    if (present)
+                        promptLoadingLastSeen = Time.realtimeSinceStartup;
+                    Camera promptMain = Camera.main;
+                    int promptMainId = promptMain != null ? promptMain.GetInstanceID() : 0;
+                    if (promptMainId == 0 || promptMainId != stableMainId)
+                    {
+                        // The prompt camera vanished or changed - back to full
+                        // suspension; stability must be re-earned.
+                        state = GateState.Suspended;
+                        stableMainId = 0;
+                        stableMainFrames = 0;
+                        transitioned = true;
+                        LastStateChangeFrame = Time.frameCount;
+                        Plugin.Log.LogInfo($"[VRGate] prompt camera changed/lost - XR suspended again (frame {Time.frameCount}, camera='{CamName(promptMain)}' id={promptMainId})");
+                    }
+                    else if (Time.realtimeSinceStartup - promptLoadingLastSeen >= Mathf.Max(grace, 0.5f))
+                    {
+                        // Loading camera gone for a full debounce window while
+                        // XR was already live on a stable camera - the load is
+                        // over, no extra suspension blink needed.
+                        state = GateState.Rendering;
+                        transitioned = true;
+                        LastStateChangeFrame = Time.frameCount;
+                        Plugin.Log.LogInfo($"[VRGate] loading ended during prompt phase - normal rendering (frame {Time.frameCount}, camera='{CamName(promptMain)}' id={promptMainId}, {RenderHealth()})");
+                    }
+                    break;
+            }
+
+            // Mid-load Camera.main stability tracking; qualifies the load's
+            // interactive prompt phase for XR (see class doc).
+            if (state == GateState.Suspended || state == GateState.Grace)
+            {
+                Camera m = Camera.main;
+                int id = m != null ? m.GetInstanceID() : 0;
+                if (id != 0 && id == stableMainId)
+                    stableMainFrames++;
+                else
+                {
+                    stableMainId = id;
+                    stableMainFrames = id != 0 ? 1 : 0;
+                }
+                if (Plugin.Cfg.PromptPhaseXR.Value && stableMainFrames >= PromptStableFrames)
+                {
+                    state = GateState.PromptResumed;
+                    promptLoadingLastSeen = Time.realtimeSinceStartup;
+                    transitioned = true;
+                    LastStateChangeFrame = Time.frameCount;
+                    Plugin.Log.LogInfo($"[VRGate] main camera '{CamName(m)}' stable {PromptStableFrames} frames during load - XR resumed for prompt phase (frame {Time.frameCount}, {RenderHealth()})");
+                }
+            }
+            else if (state == GateState.Rendering)
+            {
+                stableMainId = 0;
+                stableMainFrames = 0;
             }
 
             // The gameplay/menu main camera is tagged MainCamera in this game
