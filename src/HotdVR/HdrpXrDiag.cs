@@ -16,6 +16,7 @@ namespace HotdVR
         private static int createCount;
         private static bool lastRefresh;
         private static bool loggedFirstCreate;
+        private static string prevCameraSet = "";
 
         public static void Apply(Harmony harmony)
         {
@@ -163,16 +164,20 @@ namespace HotdVR
             setupCount++;
             VRCameraGate.Enforce(cameras);
 
-            // Log whenever the camera composition changes (scene transitions).
+            // Log camera composition changes (scene transitions). The game
+            // alternates two camera sets every frame during loads - suppress
+            // A/B/A/B flapping by only logging sets unseen in the last two.
             var names = new List<string>();
             foreach (var c in cameras)
                 if (c != null) names.Add(c.name);
             names.Sort();
             string set = string.Join("|", names);
+            if (set != lastCameraSet && set != prevCameraSet)
+                Plugin.Log.LogInfo($"[HdrpDiag] camera set changed (frame {setupCount}): [{set}]");
             if (set != lastCameraSet)
             {
+                prevCameraSet = lastCameraSet;
                 lastCameraSet = set;
-                Plugin.Log.LogInfo($"[HdrpDiag] camera set changed (frame {setupCount}): [{set}]");
             }
 
             if (setupCount != 1 && setupCount % 300 != 0)
