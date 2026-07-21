@@ -78,6 +78,7 @@ namespace HotdVR
         public readonly ConfigEntry<float> AimPitchOffset;
         public readonly ConfigEntry<float> LoadingGraceSeconds;
         public readonly ConfigEntry<bool> PromptPhaseXR;
+        public readonly ConfigEntry<bool> LoadingGridFade;
         public readonly ConfigEntry<float> RenderScale;
         public readonly ConfigEntry<bool> DisableSSR;
         public readonly ConfigEntry<bool> DisableVolumetrics;
@@ -122,10 +123,14 @@ namespace HotdVR
                 + "chapter's cameras settle before stereo submission restarts (guards the native Submit "
                 + "crash on chapter transitions). The headset stays on the loading view slightly longer "
                 + "than the flat window does. 0 = resume immediately (old behavior). Clamped to 0-10.");
-            PromptPhaseXR = config.Bind("Stability", "PromptPhaseXR", true,
-                "Resume XR during long loading phases once the main camera has been stable for ~3 seconds, "
-                + "so interactive prompts ('Shoot to start') are visible in the headset instead of a black "
-                + "screen. The churny first seconds of every load stay suspended regardless.");
+            PromptPhaseXR = config.Bind("Stability", "PromptPhaseXR", false,
+                "EXPERIMENTAL - resume XR during long loading phases once the main camera has been stable "
+                + "~3s AND the loading camera has been gone 20+ frames. Chapter loads co-render the main "
+                + "camera with camera_Loading for the whole prompt (enabling XR there crashed natively), "
+                + "so this effectively only affects menu-side loads. Keep false unless experimenting.");
+            LoadingGridFade = config.Bind("Stability", "LoadingGridFade", true,
+                "Fade the SteamVR compositor grid in while XR is suspended during loads, so the headset "
+                + "shows the tracked void instead of a frozen/black view.");
             RenderScale = config.Bind("Performance", "RenderScale", 1.0f,
                 "Eye render target scale (0.5-1.5). Lower = sharper performance, softer image. Applied at VR start.");
             DisableSSR = config.Bind("Performance", "DisableSSR", true,

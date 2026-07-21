@@ -20,20 +20,26 @@ namespace HotdVR
     /// per frame during loads, so camera_Loading is absent every other frame
     /// mid-load - the timer only expires once the flapping has actually stopped.
     ///
-    /// PromptResumed: long loading phases contain interactive prompts ("Shoot
-    /// to start") that would otherwise be a black headset. Once Camera.main has
-    /// kept the same identity for 180 consecutive frames mid-load, XR resumes
-    /// on it (single-camera rule still enforced) - the dangerous churn frames
-    /// are excluded by the stability requirement, and any camera change drops
-    /// straight back to Suspended. Chapter prompt phases last 1000+ frames;
-    /// the short boot-to-menu load (~150 frames of stable camera) never
-    /// qualifies, so it keeps the plain suspend->grace->resume path.
+    /// PromptResumed (EXPERIMENTAL, default OFF): long loading phases contain
+    /// interactive prompts ("Shoot to start") that are a black headset while
+    /// suspended. Resuming XR mid-load CRASHED on a real chapter load
+    /// (2026-07-21): chapter prompts co-render cam_MainCamera WITH
+    /// camera_Loading every visible frame, and enabling xrRendering on such a
+    /// frame produced a partial XR layout (eye 1 without eye 0) and a native
+    /// Submit crash - same signature as the original transition crash. XR
+    /// during frames that co-render camera_Loading is the crash condition, so
+    /// activation now additionally requires the loading camera to have been
+    /// absent PromptLoadingAbsentFrames consecutive frames - which a chapter
+    /// prompt never satisfies (the A/B flap runs through the whole prompt).
+    /// Suspension instead fades the SteamVR compositor grid in, so loads show
+    /// the tracked void rather than frozen black.
     /// </summary>
     internal static class VRCameraGate
     {
         private enum GateState { Rendering, Suspended, Grace, PromptResumed }
 
         private const int PromptStableFrames = 180;
+        private const int PromptLoadingAbsentFrames = 20;
 
         private static readonly HashSet<int> loggedCameras = new HashSet<int>();
         private static int lastVrCamId;
@@ -43,7 +49,9 @@ namespace HotdVR
         private static bool graceReentryLogged; // per load episode
         private static int stableMainId;        // Camera.main persistence mid-load
         private static int stableMainFrames;
+        private static int loadingAbsentStreak; // consecutive Enforce frames without camera_Loading
         private static float promptLoadingLastSeen;
+        private static bool gridFadedIn;
 
         public static Camera CurrentVRCamera { get; private set; }
 
@@ -79,6 +87,7 @@ namespace HotdVR
             foreach (var cam in cameras)
                 if (cam != null && cam.name == "camera_Loading")
                     present = true;
+            loadingAbsentStreak = present ? 0 : loadingAbsentStreak + 1;
 
             float grace = Mathf.Clamp(Plugin.Cfg.LoadingGraceSeconds.Value, 0f, 10f);
             bool transitioned = false, resumed = false, graceResume = false;
@@ -182,13 +191,17 @@ namespace HotdVR
                     stableMainId = id;
                     stableMainFrames = id != 0 ? 1 : 0;
                 }
-                if (Plugin.Cfg.PromptPhaseXR.Value && stableMainFrames >= PromptStableFrames)
+                // Hard safety: never enable XR while camera_Loading could still
+                // co-render with the main camera - that exact frame produced a
+                // partial XR layout and a native Submit crash on chapter loads.
+                if (Plugin.Cfg.PromptPhaseXR.Value && stableMainFrames >= PromptStableFrames
+                    && loadingAbsentStreak >= PromptLoadingAbsentFrames)
                 {
                     state = GateState.PromptResumed;
                     promptLoadingLastSeen = Time.realtimeSinceStartup;
                     transitioned = true;
                     LastStateChangeFrame = Time.frameCount;
-                    Plugin.Log.LogInfo($"[VRGate] main camera '{CamName(m)}' stable {PromptStableFrames} frames during load - XR resumed for prompt phase (frame {Time.frameCount}, {RenderHealth()})");
+                    Plugin.Log.LogInfo($"[VRGate] main camera '{CamName(m)}' stable {PromptStableFrames} frames and loading camera gone {PromptLoadingAbsentFrames} frames - XR resumed for prompt phase (frame {Time.frameCount}, {RenderHealth()})");
                 }
             }
             else if (state == GateState.Rendering)
@@ -236,6 +249,34 @@ namespace HotdVR
                     if (loggedCameras.Add(cam.GetInstanceID()) || InDiagWindow)
                         Plugin.Log.LogInfo($"[VRGate] '{cam.name}' xrRendering={allowXr} (frame {Time.frameCount})");
                 }
+            }
+
+            // While suspended the app submits no XR frames and the HMD would
+            // freeze/black out - fade the SteamVR compositor grid in instead
+            // (compositor-side only, zero game-rendering crash surface).
+            if (LoadingScreenActive != gridFadedIn)
+            {
+                gridFadedIn = LoadingScreenActive;
+                SetGridFade(gridFadedIn);
+            }
+        }
+
+        private static void SetGridFade(bool show)
+        {
+            if (!Plugin.Cfg.LoadingGridFade.Value)
+                return;
+            try
+            {
+                var compositor = Valve.VR.OpenVR.Compositor;
+                if (compositor != null)
+                {
+                    compositor.FadeGrid(0.3f, show);
+                    Plugin.Log.LogInfo($"[VRGate] compositor grid fade {(show ? "in" : "out")} (frame {Time.frameCount})");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogWarning($"[VRGate] FadeGrid failed: {e.Message}");
             }
         }
 
