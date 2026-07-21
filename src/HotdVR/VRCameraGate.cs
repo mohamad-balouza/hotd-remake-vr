@@ -15,8 +15,19 @@ namespace HotdVR
     internal static class VRCameraGate
     {
         private static readonly HashSet<int> loggedCameras = new HashSet<int>();
+        private static int lastVrCamId;
 
         public static Camera CurrentVRCamera { get; private set; }
+
+        /// <summary>Frame index of the last suspend/resume flip or VR-camera
+        /// identity change. Diagnostic throttles are bypassed for a window
+        /// after this so transition crash frames are attributable.
+        /// Init well below any real frame (not int.MinValue - subtraction
+        /// in InDiagWindow would overflow).</summary>
+        internal static int LastStateChangeFrame = -1000;
+
+        /// <summary>True within 120 frames of a gate state change.</summary>
+        internal static bool InDiagWindow => Time.frameCount - LastStateChangeFrame <= 120;
 
         /// <summary>True while a load screen camera is active - XR passes are
         /// fully suspended then (chapter transitions crash natively in Submit
@@ -32,16 +43,33 @@ namespace HotdVR
             foreach (var cam in cameras)
                 if (cam != null && cam.name == "camera_Loading")
                     loading = true;
-            if (loading != LoadingScreenActive)
-            {
+            bool flipped = loading != LoadingScreenActive;
+            if (flipped)
                 LoadingScreenActive = loading;
-                Plugin.Log.LogInfo($"[VRGate] loading screen {(loading ? "started - XR passes suspended" : "ended - XR passes resumed")}");
-            }
 
             // The gameplay/menu main camera is tagged MainCamera in this game
             // (menu 'Main Camera', chapters 'cam_MainCamera').
             Camera main = LoadingScreenActive ? null : Camera.main;
             CurrentVRCamera = main;
+            int mainId = main != null ? main.GetInstanceID() : 0;
+
+            if (flipped)
+            {
+                LastStateChangeFrame = Time.frameCount;
+                if (loading)
+                    Plugin.Log.LogInfo($"[VRGate] loading screen started - XR passes suspended (frame {Time.frameCount}, {RenderHealth()})");
+                else
+                    Plugin.Log.LogInfo($"[VRGate] XR passes resumed (frame {Time.frameCount}, camera='{CamName(main)}' id={mainId}, cams=[{CameraSet(cameras)}], {RenderHealth()})");
+            }
+            else if (mainId != lastVrCamId)
+            {
+                // The historical transition crash hit at the frame the next
+                // chapter's cam_MainCamera appeared - a camera identity
+                // change, not necessarily a gate flip.
+                LastStateChangeFrame = Time.frameCount;
+                Plugin.Log.LogInfo($"[VRGate] VR camera changed -> '{CamName(main)}' id={mainId} (frame {Time.frameCount}, cams=[{CameraSet(cameras)}])");
+            }
+            lastVrCamId = mainId;
 
             foreach (var cam in cameras)
             {
@@ -58,10 +86,25 @@ namespace HotdVR
                 if (hd.xrRendering != allowXr)
                 {
                     hd.xrRendering = allowXr;
-                    if (loggedCameras.Add(cam.GetInstanceID()))
-                        Plugin.Log.LogInfo($"[VRGate] '{cam.name}' xrRendering={allowXr}");
+                    if (loggedCameras.Add(cam.GetInstanceID()) || InDiagWindow)
+                        Plugin.Log.LogInfo($"[VRGate] '{cam.name}' xrRendering={allowXr} (frame {Time.frameCount})");
                 }
             }
+        }
+
+        private static string CamName(Camera cam) => cam != null ? cam.name : "<none>";
+
+        private static string RenderHealth() =>
+            $"renderHealth rendered={HdrpXrDiag.renderedFrames} repaired={HdrpXrDiag.repairedFrames} skipped={HdrpXrDiag.skippedFrames}";
+
+        private static string CameraSet(Camera[] cameras)
+        {
+            var names = new List<string>();
+            foreach (var c in cameras)
+                if (c != null)
+                    names.Add(c.name);
+            names.Sort();
+            return string.Join("|", names);
         }
     }
 }
