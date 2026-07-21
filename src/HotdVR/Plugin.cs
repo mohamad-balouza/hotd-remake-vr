@@ -37,10 +37,14 @@ namespace HotdVR
             // window is frequently unfocused while playing, so keep running.
             Application.runInBackground = true;
 
+            var harmony = new HarmonyLib.Harmony(Guid);
+            HdrpXrDiag.Apply(harmony);
+
             var runner = new GameObject("HotdVR");
             DontDestroyOnLoad(runner);
             runner.AddComponent<VRDiagnostics>();
             runner.AddComponent<VRSystems>();
+            runner.AddComponent<EyeCapture>();
         }
     }
 
@@ -48,6 +52,7 @@ namespace HotdVR
     {
         public readonly ConfigEntry<bool> VREnabled;
         public readonly ConfigEntry<bool> VerboseLogging;
+        public readonly ConfigEntry<bool> DisableRenderGraph;
 
         public VRConfig(ConfigFile config)
         {
@@ -55,6 +60,9 @@ namespace HotdVR
                 "Master switch. Set false to launch the game flat with the mod inert.");
             VerboseLogging = config.Bind("Debug", "VerboseLogging", true,
                 "Extra diagnostic logging (subsystem dumps, per-scene camera info).");
+            DisableRenderGraph = config.Bind("Rendering", "DisableRenderGraph", false,
+                "Experimental: switch HDRP to its classic (non render-graph) path when VR starts. " +
+                "Crashes on level load in this build - leave off.");
         }
     }
 }
