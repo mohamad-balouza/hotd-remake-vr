@@ -81,9 +81,16 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
    grace=0. Mitigation now: 3-state gate (Rendering/Suspended/Grace) — the
    suspension only lifts once the loading camera has been gone continuously
    for `Stability.LoadingGraceSeconds` (default 1.5s, realtime; timer restarts
-   on every reappearance). Headless-verified across the boot load (suspend →
-   grace → resume, reloaded camera identity picked up correctly); user
-   chapter 1→2 playthrough still pending.
+   on every reappearance). **VERIFIED 2026-07-21: user played chapter 1 → 2,
+   no crash; both loads show clean suspend → grace → resume onto the new
+   chapter camera with renderHealth skipped=0.**
+   Prompt phase: loading phases contain interactive prompts ("Shoot to
+   start") — camera_Loading flaps for the whole ~30s wait. Proper suspension
+   made those a black headset, so `PromptResumed` (gate state 4,
+   `Stability.PromptPhaseXR`) resumes XR mid-load once Camera.main has kept
+   one identity 180 consecutive frames; any camera change re-suspends, and
+   the load end is debounced by the loading camera staying gone for the
+   grace duration (no suspension blink into gameplay).
 - SteamVR **null driver** (re-tested 2026-07-21): culling params come out
   mostly FINITE (second eye repaired from the first) — XR passes actually
   render and submit headless, so the null driver now exercises the real
@@ -112,6 +119,13 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
   lives on off-hand Y.
 - `VRControllers` merges XR-features OR raw state, tracks edges, renders the
   laser (LineRenderer, HDRP/Unlit) + reticle sphere at the physics-raycast hit.
+  Laser toggle: off-hand stick click held 0.6s with the stick CENTERED
+  (deflected click = aim tilt), or F8; persists via `ShowLaser`.
+- `VRGunModel`: procedural primitive gun on the aim pose (the game has no
+  player-held weapon meshes in gameplay; armory `HD_PreviewWeapon` models are
+  menu-scene-embedded, not addressable). Swaps per-weapon silhouette by
+  polling `HD_Player.Player1.WeaponHolder.CurrentWeaponType` (survives scene
+  loads). `Controls.ShowGunModel`.
 - Aim ray = controller pose with `AimPitchOffset` (user-tuned, ~45°+) pitched
   down. Live adjust: off-hand stick click held + stick up/down, auto-saved to
   config on release.
@@ -135,9 +149,17 @@ All these crash identically in `ScriptableRenderContext.Submit_Internal`:
 - Comfort: `HD_PlayerCamera` Shake/ApplyHitRecoil/Zoom/StartCameraShake/
   StartCameraZoom no-op'd while VR active.
 - UI: `VRUiProjector` converts ScreenSpaceOverlay canvases → ScreenSpaceCamera
-  on the VR camera at 1m every second (crosshair canvases excluded+hidden).
+  on the VR camera at `UI.HudDistance` every second (crosshair canvases
+  excluded+hidden); conversion skipped entirely while XR is suspended.
   NOTE: camera-space canvases break the game's pixel-space canvas math, which
   is why the crosshair is excluded rather than converted.
+  `UI.HudMode=WorldFollow`: allowlisted chapter HUD canvases
+  (`UI.HudWorldSpaceCanvases`; inventory from the chapter-1 playthrough log)
+  go WorldSpace on `VRHudAnchor` — a yaw-only cockpit anchor on the rig's
+  published base (ride) pose with deadzone+hysteresis easing; canvas
+  transforms driven directly, never reparented; world scale matches the
+  camera-space apparent size so mode switches are visually continuous.
+  Menus and cam='Main Camera' contexts always stay camera-space.
 - Perf: `FrameSettings.AggregateFrameSettings` postfix strips SSR/contact
   shadows (default) and optionally volumetrics/SSAO while VR active.
   `RenderScale` sets `display.scaleOfAllRenderTargets` before StartSubsystems.
