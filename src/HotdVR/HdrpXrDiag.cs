@@ -65,7 +65,22 @@ namespace HotdVR
         private struct CachedCulling
         {
             public int frame;
+            public bool xr; // params captured from an XR pass (stereo) vs a flat render
             public UnityEngine.Rendering.ScriptableCullingParameters cullingParams;
+        }
+
+        // Cached reflection for HDCamera.xr.enabled (XRPass may be internal).
+        private static readonly System.Reflection.PropertyInfo hdCamXrProp =
+            AccessTools.Property(AccessTools.TypeByName("UnityEngine.Rendering.HighDefinition.HDCamera"), "xr");
+        private static readonly System.Reflection.PropertyInfo xrPassEnabledProp =
+            AccessTools.Property(AccessTools.TypeByName("UnityEngine.Rendering.HighDefinition.XRPass"), "enabled");
+
+        private static bool IsXrCull(object hdCamera)
+        {
+            if (hdCamera == null || hdCamXrProp == null || xrPassEnabledProp == null)
+                return false;
+            var xr = hdCamXrProp.GetValue(hdCamera);
+            return xr != null && (bool)xrPassEnabledProp.GetValue(xr);
         }
 
         // The OpenVR XR provider returns NaN culling matrices for the second
@@ -73,9 +88,14 @@ namespace HotdVR
         // them to the native renderer crashes in ScriptableRenderContext.Submit.
         // Repair: substitute the last valid culling params seen for the same
         // camera this/last few frames (in practice the left eye's - the culling
-        // frustums differ only by the eye offset). If nothing recent is cached,
-        // skip the camera render for that frame.
-        private static bool TryCullValidatePre(Camera camera, ref UnityEngine.Rendering.ScriptableCullingParameters cullingParams, ref bool __result)
+        // frustums differ only by the eye offset). MODE-AWARE (2026-07-21): an
+        // XR pass may only be repaired from an XR-pass cache entry. At post-load
+        // resume the camera's freshest cache comes from its FLAT renders during
+        // the loading screen; substituting those mono params into a stereo pass
+        // crashed natively in Submit (chapter-2 resume race - only bites when
+        // the provider NaNs on the exact resume frame). No same-mode cache =>
+        // skip the render (safe black frame until the provider recovers).
+        private static bool TryCullValidatePre(Camera camera, object hdCamera, ref UnityEngine.Rendering.ScriptableCullingParameters cullingParams, ref bool __result)
         {
             var cull = cullingParams.cullingMatrix;
             var stereoView = cullingParams.stereoViewMatrix;
@@ -83,22 +103,24 @@ namespace HotdVR
             bool valid = IsFinite(cull) && IsFinite(stereoView) && IsFinite(stereoProj)
                          && Mathf.Abs(cull.determinant) > 1e-12f;
             int camId = camera.GetInstanceID();
+            bool xrCull = IsXrCull(hdCamera);
 
             if (valid)
             {
-                lastValidCulling[camId] = new CachedCulling { frame = Time.frameCount, cullingParams = cullingParams };
+                lastValidCulling[camId] = new CachedCulling { frame = Time.frameCount, xr = xrCull, cullingParams = cullingParams };
                 renderedFrames++;
                 return true;
             }
 
-            if (lastValidCulling.TryGetValue(camId, out var cached) && Time.frameCount - cached.frame <= 5)
+            if (lastValidCulling.TryGetValue(camId, out var cached) && Time.frameCount - cached.frame <= 5
+                && cached.xr == xrCull)
             {
                 cullingParams = cached.cullingParams;
                 repairedFrames++;
                 if (Time.realtimeSinceStartup - lastRepairLog > 10f || VRCameraGate.InDiagWindow)
                 {
                     lastRepairLog = Time.realtimeSinceStartup;
-                    Plugin.Log.LogInfo($"[HdrpDiag] repaired degenerate culling with cached params f={Time.frameCount} cam='{camera.name}' (repaired={repairedFrames} rendered={renderedFrames} skipped={skippedFrames})");
+                    Plugin.Log.LogInfo($"[HdrpDiag] repaired degenerate culling with cached params f={Time.frameCount} cam='{camera.name}' xr={xrCull} (repaired={repairedFrames} rendered={renderedFrames} skipped={skippedFrames})");
                 }
                 return true;
             }
@@ -107,7 +129,7 @@ namespace HotdVR
             if (Time.realtimeSinceStartup - lastInvalidLog > 5f || VRCameraGate.InDiagWindow)
             {
                 lastInvalidLog = Time.realtimeSinceStartup;
-                Plugin.Log.LogWarning($"[HdrpDiag] DEGENERATE culling params, no recent cache - skipping render f={Time.frameCount} cam='{camera.name}' (skipped={skippedFrames} rendered={renderedFrames} repaired={repairedFrames})");
+                Plugin.Log.LogWarning($"[HdrpDiag] DEGENERATE culling params, no recent same-mode cache - skipping render f={Time.frameCount} cam='{camera.name}' xr={xrCull} (skipped={skippedFrames} rendered={renderedFrames} repaired={repairedFrames})");
                 if (!loggedMatrixDetail)
                 {
                     loggedMatrixDetail = true;
