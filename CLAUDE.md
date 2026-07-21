@@ -52,6 +52,8 @@ dotnet build src/HotdVR/HotdVR.csproj -c Release
 ## Conventions
 
 - Commit + push to `main` at every working increment (user mandate)
+- Plain commit messages — NO `Co-Authored-By: Claude` / AI-attribution
+  trailers (user mandate, 2026-07-21)
 - Never commit decompiled game sources (copyright) — they live in the session
   scratchpad `decomp/` dir; regenerate with
   `ilspycmd <game>\...\Managed\Assembly-CSharp.dll -t <TypeName>`
